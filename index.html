@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CrystalTory_Motion V2.0</title>
+    <title>CrystalTory_Motion V2.1</title>
     <style>
         :root {
-            --tuxedo-black: #0a0a0a;  /* 토리의 검은 털처럼 깊은 블랙 */
+            --tuxedo-black: #0a0a0a;
             --tuxedo-dark: #1a1a1a;
-            --tuxedo-white: #f5f5f5;  /* 토리의 가슴털처럼 깨끗한 화이트 */
+            --tuxedo-white: #f5f5f5;
             --point-silver: #a0a0a0;
-            --highlight-green: #bfff00; /* 랠리 앱의 그 느낌, 활력 */
+            --highlight-green: #bfff00;
             --border: #2d2d2d;
         }
 
@@ -25,7 +25,6 @@
             overflow: hidden;
         }
 
-        /* --- Header --- */
         header {
             padding: 15px 25px;
             background: var(--tuxedo-dark);
@@ -35,16 +34,15 @@
             align-items: center;
         }
 
-        .logo { font-size: 1.2rem; font-weight: 800; letter-spacing: 1px; }
+        .logo { font-size: 1.2rem; font-weight: 800; }
         .logo span { color: var(--point-silver); }
 
-        /* --- Main Layout --- */
         main {
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 20px;
-            gap: 20px;
+            padding: 15px;
+            gap: 15px;
             overflow-y: auto;
         }
 
@@ -55,87 +53,88 @@
             border-radius: 12px;
             overflow: hidden;
             aspect-ratio: 16 / 9;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             border: 1px solid var(--border);
         }
 
-        /* 실제 영상이 그려질 캔버스 (줌/크롭 핵심) */
-        #motionCanvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
+        #motionCanvas { width: 100%; height: 100%; display: block; }
 
-        .player-controls {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 15px;
-            background: rgba(0,0,0,0.6);
-            padding: 10px 20px;
-            border-radius: 30px;
-            backdrop-filter: blur(5px);
-        }
-
-        /* --- Zoom Control --- */
-        .zoom-panel {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        /* --- Navigation & Control --- */
+        .control-panel {
             background: var(--tuxedo-dark);
-            padding: 10px 20px;
-            border-radius: 8px;
-        }
-
-        input[type=range] { flex: 1; accent-color: var(--tuxedo-white); }
-
-        /* --- Segment Tags (The 7 Stages) --- */
-        .segment-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-            gap: 10px;
-        }
-
-        .tag-btn {
-            background: var(--tuxedo-dark);
-            border: 1px solid var(--border);
-            color: var(--point-silver);
-            padding: 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-
-        .tag-btn:hover { background: #252525; color: white; border-color: var(--point-silver); }
-        .tag-btn.active { border-color: var(--highlight-green); color: var(--highlight-green); }
-
-        /* --- Clip List (Rally App Style) --- */
-        .clip-list {
+            padding: 15px;
+            border-radius: 12px;
             display: flex;
             flex-direction: column;
             gap: 10px;
         }
 
+        /* 재생바 (Seek Bar) */
+        .seek-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #seekBar {
+            flex: 1;
+            cursor: pointer;
+            accent-color: var(--highlight-green);
+        }
+
+        .zoom-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 0.9rem;
+            color: var(--point-silver);
+        }
+        #zoomRange { flex: 1; accent-color: var(--tuxedo-white); }
+
+        /* --- Multi-Tag Grid --- */
+        .segment-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .tag-btn {
+            background: #222;
+            border: 1px solid var(--border);
+            color: var(--point-silver);
+            padding: 12px 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        /* 선택되었을 때의 스타일 (토리가 눈을 뜬 것처럼!) */
+        .tag-btn.active {
+            background: var(--highlight-green);
+            color: black;
+            font-weight: bold;
+            border-color: var(--highlight-green);
+            box-shadow: 0 0 10px rgba(191, 255, 0, 0.3);
+        }
+
+        .clip-list { display: flex; flex-direction: column; gap: 10px; }
         .clip-card {
             background: var(--tuxedo-dark);
             border-radius: 10px;
-            padding: 15px;
+            padding: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-left: 4px solid transparent;
         }
 
-        .clip-card.active { border-left-color: var(--highlight-green); background: #222; }
-
-        .clip-info h4 { margin: 0; font-size: 0.95rem; }
-        .clip-info p { margin: 5px 0 0; font-size: 0.8rem; color: #666; }
-
-        .delete-btn { background: none; border: none; color: #444; cursor: pointer; font-size: 1.2rem; }
-        .delete-btn:hover { color: #ff4444; }
+        .btn-main {
+            background: var(--tuxedo-white);
+            color: black;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
 
         footer { padding: 10px; text-align: center; font-size: 0.7rem; color: #333; }
     </style>
@@ -144,68 +143,86 @@
 
 <header>
     <div class="logo">CRYSTAL TORY <span>MOTION</span></div>
-    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 작업실 🐾</div>
+    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 턱시도 작업실 🐾</div>
 </header>
 
 <main>
-    <input type="file" id="videoUpload" accept="video/*" style="margin-bottom: 10px;">
+    <input type="file" id="videoUpload" accept="video/*">
 
     <div class="player-container">
         <canvas id="motionCanvas"></canvas>
-        <div class="player-controls">
-            <button onclick="playPause()" style="background:none; border:none; color:white; cursor:pointer;">▶/Ⅱ</button>
-            <span id="timeDisplay" style="font-size:0.8rem; min-width:80px;">00:00 / 00:00</span>
-        </div>
     </div>
 
-    <div class="zoom-panel">
-        <span>ZOOM</span>
-        <input type="range" id="zoomRange" min="1" max="4" step="0.1" value="1">
-        <span id="zoomVal">1.0x</span>
+    <div class="control-panel">
+        <div class="seek-container">
+            <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:1.2rem; cursor:pointer;">▶</button>
+            <input type="range" id="seekBar" value="0" step="0.1">
+            <span id="timeDisplay" style="font-size:0.75rem; min-width:75px;">00:00 / 00:00</span>
+        </div>
+
+        <div class="zoom-container">
+            <span>ZOOM</span>
+            <input type="range" id="zoomRange" min="1" max="5" step="0.1" value="1">
+            <span id="zoomVal">1.0x</span>
+        </div>
     </div>
 
     <div class="segment-grid">
-        <button class="tag-btn" onclick="tagMotion('스타트')">스타트</button>
-        <button class="tag-btn" onclick="tagMotion('슬라럼')">슬라럼</button>
-        <button class="tag-btn" onclick="tagMotion('로딩')">로딩</button>
-        <button class="tag-btn" onclick="tagMotion('어프로치')">어프로치</button>
-        <button class="tag-btn" onclick="tagMotion('점프')">점프</button>
-        <button class="tag-btn" onclick="tagMotion('랜딩')">랜딩</button>
-        <button class="tag-btn" onclick="tagMotion('종료')">종료</button>
+        <button class="tag-btn" onclick="toggleTag(this)">스타트</button>
+        <button class="tag-btn" onclick="toggleTag(this)">슬라럼</button>
+        <button class="tag-btn" onclick="toggleTag(this)">로딩</button>
+        <button class="tag-btn" onclick="toggleTag(this)">어프로치</button>
+        <button class="tag-btn" onclick="toggleTag(this)">점프</button>
+        <button class="tag-btn" onclick="toggleTag(this)">랜딩</button>
+        <button class="tag-btn" onclick="toggleTag(this)">종료</button>
+        <button class="btn-main" onclick="saveClip()">클립 저장</button>
     </div>
 
     <div class="clip-list" id="clipList">
-        <div class="clip-card active">
-            <div class="clip-info">
-                <h4>점프 #1 (성공)</h4>
-                <p>01:24 - 01:28 (4.2s) | Zoom 2.5x</p>
-            </div>
-            <button class="delete-btn">&times;</button>
         </div>
-    </div>
 </main>
 
-<footer>© 2024 CrystalTory_Motion | Designed for Tory the Tuxedo Cat</footer>
+<footer>© 2026 CrystalTory_Motion | Created for Crystal, Tory & Dad</footer>
 
-<video id="hiddenVideo" style="display:none;" loop></video>
+<video id="hiddenVideo" style="display:none;"></video>
 
 <script>
     const video = document.getElementById('hiddenVideo');
     const canvas = document.getElementById('motionCanvas');
     const ctx = canvas.getContext('2d');
+    const seekBar = document.getElementById('seekBar');
     const zoomRange = document.getElementById('zoomRange');
     const zoomVal = document.getElementById('zoomVal');
     const videoUpload = document.getElementById('videoUpload');
+    const playBtn = document.getElementById('playBtn');
 
     let zoom = 1.0;
-    
-    // 파일 업로드 처리
+
     videoUpload.addEventListener('change', function(e) {
         const file = e.target.files[0];
-        const url = URL.createObjectURL(file);
-        video.src = url;
-        video.play();
-        render();
+        if (file) {
+            video.src = URL.createObjectURL(file);
+            video.onloadedmetadata = () => {
+                seekBar.max = video.duration;
+                render();
+            };
+        }
+    });
+
+    // 재생/일시정지 토글
+    function togglePlay() {
+        if (video.paused) {
+            video.play();
+            playBtn.innerText = "Ⅱ";
+        } else {
+            video.pause();
+            playBtn.innerText = "▶";
+        }
+    }
+
+    // 재생바 이동 (Seek)
+    seekBar.addEventListener('input', () => {
+        video.currentTime = seekBar.value;
     });
 
     // 줌 조절
@@ -214,33 +231,54 @@
         zoomVal.innerText = zoom + 'x';
     });
 
-    function playPause() {
-        if (video.paused) video.play();
-        else video.pause();
+    // 태그 중복 선택 (Toggle)
+    function toggleTag(btn) {
+        btn.classList.toggle('active');
     }
 
-    // 캔버스 렌더링 루프 (가장 핵심: 라이더를 중앙에 두고 확대하는 원리)
-    function render() {
-        if (video.paused || video.ended) {
-            requestAnimationFrame(render);
+    // 클립 저장 로직 (간단히 리스트에 추가)
+    function saveClip() {
+        const activeTags = Array.from(document.querySelectorAll('.tag-btn.active'))
+                                .map(btn => btn.innerText);
+        
+        if (activeTags.length === 0) {
+            alert("선택된 태그가 없습니다!");
             return;
         }
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        const time = formatTime(video.currentTime);
+        const list = document.getElementById('clipList');
+        const card = document.createElement('div');
+        card.className = 'clip-card';
+        card.innerHTML = `
+            <div>
+                <strong style="color:var(--highlight-green)">[${activeTags.join(', ')}]</strong>
+                <div style="font-size:0.8rem; color:#888;">시간: ${time} | Zoom: ${zoom}x</div>
+            </div>
+            <button onclick="this.parentElement.remove()" style="background:none; border:none; color:#555; cursor:pointer;">&times;</button>
+        `;
+        list.prepend(card);
+        
+        // 저장 후 태그 초기화 (선택 사항)
+        document.querySelectorAll('.tag-btn.active').forEach(btn => btn.classList.remove('active'));
+    }
 
-        // 원본 중심 좌표 (나중에 AI가 이 좌표를 라이더 위치로 바꿔줄 거예요)
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
+    function render() {
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
 
         const sw = canvas.width / zoom;
         const sh = canvas.height / zoom;
-        const sx = centerX - sw / 2;
-        const sy = centerY - sh / 2;
+        const sx = (canvas.width - sw) / 2;
+        const sy = (canvas.height - sh) / 2;
 
         ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
         
-        // 시간 표시 업데이트
+        // 재생바 위치 업데이트
+        if (!video.paused) {
+            seekBar.value = video.currentTime;
+        }
+        
         document.getElementById('timeDisplay').innerText = 
             formatTime(video.currentTime) + " / " + formatTime(video.duration);
 
@@ -252,10 +290,6 @@
         const m = Math.floor(seconds / 60);
         const s = Math.floor(seconds % 60);
         return m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0');
-    }
-
-    function tagMotion(name) {
-        alert(name + " 구간을 캡처합니다. (기능 구현 예정)");
     }
 </script>
 </body>
