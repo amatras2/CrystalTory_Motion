@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CrystalTory_Motion V3.0 (AI Tracker)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CrystalTory_Motion V3.1 (AI + Hybrid Pan)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -25,6 +25,7 @@
             flex-direction: column;
             height: 100vh;
             overflow: hidden;
+            touch-action: none; /* 태블릿 드래그 시 브라우저 스크롤 방지 */
         }
 
         header {
@@ -48,7 +49,6 @@
             overflow-y: auto;
         }
 
-        /* --- Player Section --- */
         .player-container {
             position: relative;
             background: #000;
@@ -56,11 +56,11 @@
             overflow: hidden;
             aspect-ratio: 16 / 9;
             border: 1px solid var(--border);
+            cursor: move; /* 드래그 가능하다는 표시 */
         }
 
         #motionCanvas { width: 100%; height: 100%; display: block; }
 
-        /* AI 로딩 상태 표시 */
         #loadingStatus {
             position: absolute;
             top: 50%;
@@ -74,7 +74,6 @@
             z-index: 10;
         }
 
-        /* --- Control Panel --- */
         .control-panel {
             background: var(--tuxedo-dark);
             padding: 15px;
@@ -96,7 +95,6 @@
         }
         #zoomRange { flex: 1; accent-color: var(--tuxedo-white); }
 
-        /* --- AI Control Bar --- */
         .ai-control-bar {
             display: flex;
             gap: 10px;
@@ -116,8 +114,13 @@
             font-size: 0.85rem;
             transition: all 0.2s;
         }
-        .btn-ai:hover { background: #222; color: white; border-color: var(--point-silver); }
         .btn-ai.active { background: var(--highlight-green); color: black; font-weight: bold; border-color: var(--highlight-green); }
+
+        .guide-text {
+            font-size: 0.8rem;
+            color: #666;
+            text-align: center;
+        }
 
         footer { padding: 10px; text-align: center; font-size: 0.7rem; color: #333; }
     </style>
@@ -126,16 +129,18 @@
 
 <header>
     <div class="logo">CRYSTAL TORY <span>MOTION</span></div>
-    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 AI 턱시도 작업실 🐾</div>
+    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 하이브리드 작업실 🐾</div>
 </header>
 
 <main>
     <input type="file" id="videoUpload" accept="video/*">
 
-    <div class="player-container">
+    <div class="player-container" id="playerContainer">
         <canvas id="motionCanvas"></canvas>
-        <div id="loadingStatus">AI 모델 로딩 중... (Tory-Tracker v3.0)</div>
+        <div id="loadingStatus">AI 모델 로딩 중...</div>
     </div>
+
+    <p class="guide-text">💡 화면을 손가락으로 밀어서(Drag) 직접 라이더를 따라갈 수 있습니다.</p>
 
     <div class="control-panel">
         <div class="seek-container">
@@ -146,16 +151,15 @@
 
         <div class="zoom-container">
             <span>ZOOM</span>
-            <input type="range" id="zoomRange" min="1" max="5" step="0.1" value="1.5">
-            <span id="zoomVal">1.5x</span>
+            <input type="range" id="zoomRange" min="1" max="8" step="0.1" value="2.0">
+            <span id="zoomVal">2.0x</span>
         </div>
     </div>
 
     <div class="ai-control-bar">
-        <button class="btn-ai" id="aiTrackBtn" onclick="toggleAITracking()">AI 추적 시작 (Rider Tracking)</button>
-        <button class="btn-ai" onclick="resetTracking()">추적 초기화</button>
+        <button class="btn-ai" id="aiTrackBtn" onclick="toggleAITracking()">AI 추적 모드</button>
+        <button class="btn-ai" onclick="resetTracking()">중앙 정렬</button>
     </div>
-
 </main>
 
 <footer>© 2026 CrystalTory_Motion | Created for Crystal, Tory & Dad</footer>
@@ -173,24 +177,31 @@
     const playBtn = document.getElementById('playBtn');
     const loadingStatus = document.getElementById('loadingStatus');
     const aiTrackBtn = document.getElementById('aiTrackBtn');
+    const playerContainer = document.getElementById('playerContainer');
 
     let model = null;
     let isAITracking = false;
-    let isDetecting = false; // 🔒 과부하 방지용 잠금장치 (추가됨!)
-    let aiStatusText = "대기 중"; // AI 상태 표시 텍스트
-    let zoom = 1.5;
+    let isDetecting = false;
+    let aiStatusText = "대기";
+    let zoom = 2.0;
     
+    // 위치 제어 변수들
     let currentCenterX = 0;
     let currentCenterY = 0;
     let targetCenterX = 0;
     let targetCenterY = 0;
-    const smoothingFactor = 0.05; // 더 부드럽게 이동하도록 수치 조정
+    const smoothingFactor = 0.15; // 반응속도를 위해 살짝 높임
 
+    // 🖐️ 수동 드래그 관련 변수
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    // AI 모델 로딩
     async function loadModel() {
         loadingStatus.style.display = 'block';
         model = await cocoSsd.load();
         loadingStatus.style.display = 'none';
-        console.log("AI Model Loaded: Tory-Tracker v3.0.1");
     }
     loadModel();
 
@@ -207,68 +218,87 @@
         }
     });
 
+    // 🖐️ 수동 드래그(Pan) 로직 추가
+    playerContainer.addEventListener('mousedown', startDrag);
+    playerContainer.addEventListener('mousemove', drag);
+    window.addEventListener('mouseup', endDrag);
+
+    playerContainer.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
+    playerContainer.addEventListener('touchmove', (e) => {
+        e.preventDefault(); // 스크롤 방지
+        drag(e.touches[0]);
+    }, {passive: false});
+    window.addEventListener('touchend', endDrag);
+
+    function startDrag(e) {
+        isDragging = true;
+        isAITracking = false; // 드래그 시작하면 AI 추적은 잠시 꺼줌 (수동 우선)
+        aiTrackBtn.classList.remove('active');
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    }
+
+    function drag(e) {
+        if (!isDragging) return;
+        
+        // 마우스 이동 거리 계산
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+
+        // 캔버스 크기와 영상 원본 크기 비율에 맞춰 이동 거리 보정
+        const scale = video.videoWidth / playerContainer.offsetWidth / zoom;
+        
+        targetCenterX -= dx * scale;
+        targetCenterY -= dy * scale;
+
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    }
+
+    function endDrag() { isDragging = false; }
+
     function togglePlay() {
         if (video.paused) { video.play(); playBtn.innerText = "Ⅱ"; }
         else { video.pause(); playBtn.innerText = "▶"; }
     }
 
     seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
-
-    zoomRange.addEventListener('input', (e) => {
-        zoom = e.target.value;
-        zoomVal.innerText = zoom + 'x';
-    });
+    zoomRange.addEventListener('input', (e) => { zoom = e.target.value; zoomVal.innerText = zoom + 'x'; });
 
     function toggleAITracking() {
-        if (!model) { alert("AI 모델이 아직 로딩 중입니다. 잠시만 기다려주세요!"); return; }
+        if (!model) return;
         isAITracking = !isAITracking;
-        if (isAITracking) {
-            aiTrackBtn.innerText = "AI 추적 중... (Ⅱ 중지)";
-            aiTrackBtn.classList.add('active');
-        } else {
-            aiTrackBtn.innerText = "AI 추적 시작 (Rider Tracking)";
-            aiTrackBtn.classList.remove('active');
-            aiStatusText = "추적 중지됨";
-        }
+        isAITracking ? aiTrackBtn.classList.add('active') : aiTrackBtn.classList.remove('active');
     }
 
     function resetTracking() {
         isAITracking = false;
-        aiTrackBtn.innerText = "AI 추적 시작 (Rider Tracking)";
         aiTrackBtn.classList.remove('active');
         targetCenterX = video.videoWidth / 2;
         targetCenterY = video.videoHeight / 2;
-        aiStatusText = "초기화됨";
     }
 
-    // 🧠 AI 분석 핵심 로직 개선
     async function detectFrame() {
-        // 이미 분석 중이거나 멈춰있으면 무시 (과부하 방지)
-        if (!isAITracking || video.paused || video.ended || isDetecting) return;
-        
-        isDetecting = true; // 분석 시작 (문 잠금)
+        if (!isAITracking || video.paused || isDetecting) return;
+        isDetecting = true;
 
         try {
-            // 캔버스가 아닌 '원본 영상'을 기준으로 찾습니다.
             const predictions = await model.detect(video);
-            
-            // 사람, 서프보드, 배 중에서 가장 확률 높은 것 찾기
-            const target = predictions.filter(p => ['person', 'surfboard', 'boat'].includes(p.class))
+            // 보트(boat)보다는 사람(person)에게 훨씬 높은 가중치를 줌
+            const target = predictions.filter(p => p.class === 'person' && p.score > 0.4) // 사람 우선 탐색
+                                      .sort((a, b) => b.score - a.score)[0] 
+                           || predictions.filter(p => ['surfboard', 'boat'].includes(p.class)) // 없으면 보트라도
                                       .sort((a, b) => b.score - a.score)[0];
 
             if (target) {
                 const [x, y, width, height] = target.bbox;
                 targetCenterX = x + width / 2;
                 targetCenterY = y + height / 2;
-                aiStatusText = `🎯 찾음! (${target.class})`;
+                aiStatusText = `🎯 ${target.class}`;
             } else {
-                aiStatusText = `👀 찾는 중... (너무 작음)`;
+                aiStatusText = `👀 찾는 중...`;
             }
-        } catch (error) {
-            console.error(error);
-        } finally {
-            isDetecting = false; // 분석 완료 (문 열림)
-        }
+        } catch (e) {} finally { isDetecting = false; }
     }
 
     function render() {
@@ -277,44 +307,37 @@
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        // AI 추적 호출
         if (isAITracking) { detectFrame(); }
 
+        // 스무딩 (자연스러운 이동)
         currentCenterX += (targetCenterX - currentCenterX) * smoothingFactor;
         currentCenterY += (targetCenterY - currentCenterY) * smoothingFactor;
 
-        // 화면 밖으로 안 나가게 보정
-        currentCenterX = Math.max(canvas.width/zoom/2, Math.min(canvas.width - canvas.width/zoom/2, currentCenterX));
-        currentCenterY = Math.max(canvas.height/zoom/2, Math.min(canvas.height - canvas.height/zoom/2, currentCenterY));
-
+        // 경계선 보정
         const sw = canvas.width / zoom;
         const sh = canvas.height / zoom;
+        currentCenterX = Math.max(sw/2, Math.min(canvas.width - sw/2, currentCenterX));
+        currentCenterY = Math.max(sh/2, Math.min(canvas.height - sh/2, currentCenterY));
+
         const sx = currentCenterX - sw / 2;
         const sy = currentCenterY - sh / 2;
 
         ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
         
-        // AI 상태 텍스트 그리기 (화면 우측 상단)
+        // 상태 표시
         if (isAITracking) {
-            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-            ctx.fillRect(canvas.width - 160, 10, 150, 30);
-            ctx.fillStyle = "#bfff00";
-            ctx.font = "16px Pretendard";
-            ctx.fillText(aiStatusText, canvas.width - 150, 30);
+            ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(20, 20, 120, 30);
+            ctx.fillStyle = "#bfff00"; ctx.font = "14px Pretendard"; ctx.fillText(aiStatusText, 35, 40);
         }
 
         if (!video.paused) { seekBar.value = video.currentTime; }
-        
-        document.getElementById('timeDisplay').innerText = 
-            formatTime(video.currentTime) + " / " + formatTime(video.duration);
-
+        document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
         requestAnimationFrame(render);
     }
 
     function formatTime(seconds) {
         if (isNaN(seconds)) return "00:00";
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
+        const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60);
         return m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0');
     }
 </script>
