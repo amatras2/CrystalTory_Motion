@@ -1,222 +1,199 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V3.3 (Pan Booster)</title>
-    <style>
-        :root {
-            --tuxedo-black: #0a0a0a; --tuxedo-dark: #1a1a1a;
-            --tuxedo-white: #f5f5f5; --point-silver: #a0a0a0;
-            --highlight-green: #bfff00; --border: #2d2d2d;
-        }
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 
-        body {
-            background-color: var(--tuxedo-black); color: var(--tuxedo-white);
-            font-family: 'Pretendard', sans-serif; margin: 0;
-            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
-            touch-action: none;
-        }
+// 웨이크보드 7단계 태그 정의
+const MOTION_TAGS = ['스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시'];
 
-        header {
-            padding: 15px 25px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .logo { font-size: 1.2rem; font-weight: 800; }
-        .logo span { color: var(--point-silver); }
+export default function CrystalToryMotionEditor() {
+  const canvasRef = useRef(null);
+  const videoRef = useRef(null);
+  const requestRef = useRef(null);
 
-        main { flex: 1; display: flex; flex-direction: column; padding: 15px; gap: 15px; }
+  // V3.3 기존 상태 (줌, 팬)
+  const [zoom, setZoom] = useState(2.0); // 기본 2배 줌
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-        .player-container {
-            position: relative; background: #000; border-radius: 12px;
-            overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border);
-            cursor: grab;
-        }
-        .player-container:active { cursor: grabbing; }
+  // V4.0 새로운 핵심 상태 (기록, 자동재생, 태그)
+  const [isRecording, setIsRecording] = useState(false);
+  const [isAutoPlay, setIsAutoPlay] = useState(false);
+  const [recordedPath, setRecordedPath] = useState([]); 
+  const [savedTags, setSavedTags] = useState([]);
 
-        #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
+  // 1. 비디오 및 캔버스 렌더링 루프
+  const renderFrame = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.paused || video.ended) return;
 
-        .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; }
-        .seek-container { display: flex; align-items: center; gap: 10px; }
-        #seekBar { flex: 1; cursor: pointer; accent-color: var(--highlight-green); }
-        
-        /* 슬라이더 컨트롤 영역 패키징 */
-        .sliders-group {
-            display: flex; flex-direction: column; gap: 12px; 
-            background: #111; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
-        }
-        .slider-row { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; color: var(--point-silver); }
-        .slider-row label { min-width: 60px; font-weight: bold; }
-        input[type=range] { flex: 1; accent-color: var(--tuxedo-white); }
-        .val-display { min-width: 35px; text-align: right; color: var(--highlight-green); font-weight: bold; }
-
-        .guide-text { font-size: 0.85rem; color: #888; text-align: center; margin-top: 5px; }
-    </style>
-</head>
-<body>
-
-<header>
-    <div class="logo">CRYSTAL TORY <span>MOTION</span></div>
-    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 작업실 (V3.3) 🐾</div>
-</header>
-
-<main>
-    <input type="file" id="videoUpload" accept="video/*">
-
-    <div class="player-container" id="playerContainer">
-        <canvas id="motionCanvas"></canvas>
-    </div>
-    
-    <p class="guide-text">💡 줌을 최대로 당겼을 때 느리다면 <b>'드래그 감도'</b>를 올려보세요!</p>
-
-    <div class="control-panel">
-        <div class="seek-container">
-            <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:1.2rem; cursor:pointer;">▶</button>
-            <input type="range" id="seekBar" value="0" step="0.1">
-            <span id="timeDisplay" style="font-size:0.75rem; min-width:75px;">00:00 / 00:00</span>
-        </div>
-
-        <div class="sliders-group">
-            <div class="slider-row">
-                <label>줌 배율</label>
-                <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1">
-                <span class="val-display" id="zoomVal">1.0x</span>
-            </div>
-            <div class="slider-row">
-                <label>드래그 감도</label>
-                <input type="range" id="panRange" min="1" max="5" step="0.5" value="2.5">
-                <span class="val-display" id="panVal">2.5x</span>
-            </div>
-        </div>
-        
-        <button onclick="resetCenter()" style="background:#222; color:white; border:1px solid #444; padding:10px; border-radius:6px; margin-top:5px; cursor:pointer; font-weight:bold;">🎯 정중앙으로 초기화</button>
-    </div>
-</main>
-
-<video id="hiddenVideo" style="display:none;"></video>
-
-<script>
-    const video = document.getElementById('hiddenVideo');
-    const canvas = document.getElementById('motionCanvas');
     const ctx = canvas.getContext('2d');
-    const seekBar = document.getElementById('seekBar');
-    const zoomRange = document.getElementById('zoomRange');
-    const zoomVal = document.getElementById('zoomVal');
-    const panRange = document.getElementById('panRange');
-    const panVal = document.getElementById('panVal');
-    const videoUpload = document.getElementById('videoUpload');
-    const playBtn = document.getElementById('playBtn');
-    const playerContainer = document.getElementById('playerContainer');
+    const { videoWidth, videoHeight } = video;
 
-    let zoom = 1.0;
-    let panSensitivity = 2.5; // 드래그 부스터 기본값 (2.5배 빠름)
+    // 캔버스 크기 맞춤
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+
+    // V4.0 자동 재생(Auto-Pan) 로직: 기록된 경로에서 현재 시간에 맞는 좌표 찾기
+    let currentPan = pan;
+    if (isAutoPlay && recordedPath.length > 0) {
+      const currentTime = video.currentTime;
+      // 현재 시간과 가장 가까운 기록된 좌표를 찾습니다 (추후 보간법(Interpolation) 적용 가능)
+      const closestPoint = recordedPath.reduce((prev, curr) => 
+        Math.abs(curr.time - currentTime) < Math.abs(prev.time - currentTime) ? curr : prev
+      );
+      currentPan = { x: closestPoint.x, y: closestPoint.y };
+      setPan(currentPan); // UI 업데이트를 위해 상태 동기화
+    }
+
+    // 그리기 로직 (줌 & 팬 적용)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
     
-    let centerX = 0;
-    let centerY = 0;
-    let isDragging = false;
-    let lastMouseX = 0;
-    let lastMouseY = 0;
-
-    videoUpload.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            video.src = URL.createObjectURL(file);
-            video.onloadedmetadata = () => {
-                seekBar.max = video.duration;
-                centerX = video.videoWidth / 2;
-                centerY = video.videoHeight / 2;
-                render();
-            };
-        }
-    });
-
-    playerContainer.addEventListener('mousedown', startDrag);
-    window.addEventListener('mousemove', drag);
-    window.addEventListener('mouseup', endDrag);
-
-    playerContainer.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
-    window.addEventListener('touchmove', (e) => {
-        if(isDragging) e.preventDefault();
-        drag(e.touches[0]);
-    }, {passive: false});
-    window.addEventListener('touchend', endDrag);
-
-    function startDrag(e) {
-        isDragging = true;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-    }
-
-    function drag(e) {
-        if (!isDragging) return;
-        
-        const dx = e.clientX - lastMouseX;
-        const dy = e.clientY - lastMouseY;
-
-        const displayWidth = playerContainer.offsetWidth;
-        
-        // 🚀 핵심 변경: 드래그 감도(panSensitivity)를 곱해서 이동 속도를 증폭시킵니다!
-        const scale = ((video.videoWidth / zoom) / displayWidth) * panSensitivity;
-        
-        centerX -= dx * scale;
-        centerY -= dy * scale;
-
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-    }
-
-    function endDrag() { isDragging = false; }
-
-    function resetCenter() {
-        centerX = video.videoWidth / 2;
-        centerY = video.videoHeight / 2;
-    }
-
-    function togglePlay() {
-        if (video.paused) { video.play(); playBtn.innerText = "Ⅱ"; }
-        else { video.pause(); playBtn.innerText = "▶"; }
-    }
-
-    seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
+    // 중앙 기준 확대 및 이동
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-canvas.width / 2 + currentPan.x, -canvas.height / 2 + currentPan.y);
     
-    zoomRange.addEventListener('input', (e) => { 
-        zoom = e.target.value; 
-        zoomVal.innerText = zoom + 'x'; 
-    });
+    // 비디오 비율 유지하며 그리기 (object-fit: cover 느낌)
+    const scale = Math.max(canvas.width / videoWidth, canvas.height / videoHeight);
+    const x = (canvas.width / 2) - (videoWidth / 2) * scale;
+    const y = (canvas.height / 2) - (videoHeight / 2) * scale;
+    
+    ctx.drawImage(video, x, y, videoWidth * scale, videoHeight * scale);
+    ctx.restore();
 
-    panRange.addEventListener('input', (e) => { 
-        panSensitivity = e.target.value; 
-        panVal.innerText = panSensitivity + 'x'; 
-    });
+    requestRef.current = requestAnimationFrame(renderFrame);
+  }, [zoom, pan, isAutoPlay, recordedPath]);
 
-    function render() {
-        if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        const viewWidth = canvas.width / zoom;
-        const viewHeight = canvas.height / zoom;
-
-        centerX = Math.max(viewWidth / 2, Math.min(canvas.width - viewWidth / 2, centerX));
-        centerY = Math.max(viewHeight / 2, Math.min(canvas.height - viewHeight / 2, centerY));
-
-        const sx = centerX - viewWidth / 2;
-        const sy = centerY - viewHeight / 2;
-
-        ctx.drawImage(video, sx, sy, viewWidth, viewHeight, 0, 0, canvas.width, canvas.height);
-        
-        if (!video.paused) { seekBar.value = video.currentTime; }
-        document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
-        
-        requestAnimationFrame(render);
+  // 비디오 재생 이벤트 리스너
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.addEventListener('play', () => {
+        requestRef.current = requestAnimationFrame(renderFrame);
+      });
     }
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [renderFrame]);
 
-    function formatTime(seconds) {
-        if (isNaN(seconds)) return "00:00";
-        const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60);
-        return m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0');
+  // 2. 수동 드래그 및 경로 기록 (Touch / Mouse)
+  const handlePointerDown = (e) => {
+    if (isAutoPlay) return; // 자동 재생 중에는 수동 조작 방지
+    setIsDragging(true);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setDragStart({ x: clientX - pan.x, y: clientY - pan.y });
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging || isAutoPlay) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const newPanX = clientX - dragStart.x;
+    const newPanY = clientY - dragStart.y;
+    setPan({ x: newPanX, y: newPanY });
+
+    // V4.0 기록 로직: 녹화 중일 때 비디오 시간과 함께 좌표 저장
+    if (isRecording && videoRef.current) {
+      setRecordedPath(prev => [
+        ...prev, 
+        { time: videoRef.current.currentTime, x: newPanX, y: newPanY }
+      ]);
     }
-</script>
-</body>
-</html>
+  };
+
+  const handlePointerUp = () => setIsDragging(false);
+
+  // 3. 태그 추가 로직
+  const addTag = (tagName) => {
+    if (!videoRef.current) return;
+    const time = videoRef.current.currentTime;
+    setSavedTags(prev => [...prev, { tag: tagName, time: time }].sort((a, b) => a.time - b.time));
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-[#121212] text-[#E0E0E0] font-sans">
+      {/* 상단 헤더: 턱시도 다크 컨셉 */}
+      <header className="p-4 bg-black border-b border-gray-800 flex justify-between items-center">
+        <h1 className="text-xl font-semibold tracking-wider flex items-center gap-2">
+          <span className="w-3 h-3 bg-white rounded-full inline-block"></span>
+          CrystalTory<span className="text-gray-400 font-light">_Motion</span>
+        </h1>
+        <div className="flex gap-3">
+          {/* 기록 버튼 */}
+          <button 
+            onClick={() => setIsRecording(!isRecording)}
+            className={`px-4 py-2 rounded-full text-sm transition-all ${
+              isRecording ? 'bg-red-900 text-red-200 border border-red-500' : 'bg-gray-800 text-white hover:bg-gray-700'
+            }`}
+          >
+            {isRecording ? '🔴 경로 기록 중...' : '⏺ 경로 기록 시작'}
+          </button>
+          {/* 자동 재생 토글 버튼 */}
+          <button 
+            onClick={() => setIsAutoPlay(!isAutoPlay)}
+            className={`px-4 py-2 rounded-full text-sm transition-all ${
+              isAutoPlay ? 'bg-blue-900 text-blue-200 border border-blue-500' : 'bg-gray-800 text-white hover:bg-gray-700'
+            }`}
+            disabled={recordedPath.length === 0}
+          >
+            {isAutoPlay ? '🤖 Auto-Pan 켜짐' : '👆 수동 모드'}
+          </button>
+        </div>
+      </header>
+
+      {/* 메인 뷰어 영역 */}
+      <main className="flex-1 relative overflow-hidden bg-black flex justify-center items-center">
+        {/* 숨겨진 원본 비디오 */}
+        <video 
+          ref={videoRef}
+          src="/sample-wakeboard.mp4" 
+          controls 
+          className="hidden" // 화면엔 캔버스만 보입니다.
+        />
+        
+        {/* 태블릿 터치 대응 캔버스 */}
+        <canvas
+          ref={canvasRef}
+          className={`w-full h-full cursor-grab ${isDragging ? 'cursor-grabbing' : ''}`}
+          onMouseDown={handlePointerDown}
+          onMouseMove={handlePointerMove}
+          onMouseUp={handlePointerUp}
+          onMouseLeave={handlePointerUp}
+          onTouchStart={handlePointerDown}
+          onTouchMove={handlePointerMove}
+          onTouchEnd={handlePointerUp}
+        />
+
+        {/* 줌 컨트롤 UI (간단 구현) */}
+        <div className="absolute bottom-6 right-6 bg-black/60 p-2 rounded-xl backdrop-blur-sm border border-gray-800 flex flex-col gap-2">
+          <button onClick={() => setZoom(z => Math.min(z + 0.5, 4))} className="w-10 h-10 bg-gray-800 rounded-lg hover:bg-gray-700">+</button>
+          <span className="text-center text-xs text-gray-400">{zoom.toFixed(1)}x</span>
+          <button onClick={() => setZoom(z => Math.max(z - 0.5, 1))} className="w-10 h-10 bg-gray-800 rounded-lg hover:bg-gray-700">-</button>
+        </div>
+      </main>
+
+      {/* 하단 태그 패널 (7단계 모션 분류) */}
+      <footer className="h-32 bg-[#1A1A1A] border-t border-gray-800 p-4 flex flex-col justify-center">
+        <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+          {MOTION_TAGS.map(tag => (
+            <button 
+              key={tag}
+              onClick={() => addTag(tag)}
+              className="whitespace-nowrap px-5 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700 transition-colors shadow-sm"
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+        {/* 찍힌 태그들 간단 표시 */}
+        <div className="text-xs text-gray-500 mt-2 flex gap-3">
+          {savedTags.map((t, i) => (
+            <span key={i}>[{t.time.toFixed(1)}s] {t.tag}</span>
+          ))}
+        </div>
+      </footer>
+    </div>
+  );
+}
