@@ -1,245 +1,348 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CrystalTory_Motion V4.0</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { background-color: #121212; color: #E0E0E0; margin: 0; touch-action: none; overflow: hidden; }
-    .custom-scrollbar::-webkit-scrollbar { height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CrystalTory_Motion V4.0 (Auto-Tracking Engine)</title>
+    <style>
+        :root {
+            --tuxedo-black: #0a0a0a; --tuxedo-dark: #1a1a1a;
+            --tuxedo-white: #f5f5f5; --point-silver: #a0a0a0;
+            --highlight-green: #bfff00; --highlight-red: #ff4757; --border: #2d2d2d;
+        }
+
+        body {
+            background-color: var(--tuxedo-black); color: var(--tuxedo-white);
+            font-family: 'Pretendard', sans-serif; margin: 0;
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            touch-action: none;
+        }
+
+        header {
+            padding: 15px 25px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .logo { font-size: 1.2rem; font-weight: 800; }
+        .logo span { color: var(--point-silver); font-weight: 300; }
+
+        main { flex: 1; display: flex; flex-direction: column; padding: 15px; gap: 10px; overflow-y: auto; }
+
+        .player-container {
+            position: relative; background: #000; border-radius: 12px;
+            overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border);
+            cursor: grab; flex-shrink: 0;
+        }
+        .player-container:active { cursor: grabbing; }
+
+        #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+        .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;}
+        .seek-container { display: flex; align-items: center; gap: 10px; }
+        #seekBar { flex: 1; cursor: pointer; accent-color: var(--highlight-green); }
+        
+        .sliders-group {
+            display: flex; flex-direction: column; gap: 12px; 
+            background: #111; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+        }
+        .slider-row { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; color: var(--point-silver); }
+        .slider-row label { min-width: 60px; font-weight: bold; }
+        input[type=range] { flex: 1; accent-color: var(--tuxedo-white); }
+        .val-display { min-width: 35px; text-align: right; color: var(--highlight-green); font-weight: bold; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 5px; }
+        .action-btn { 
+            flex: 1; background: #222; color: white; border: 1px solid #444; 
+            padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        .action-btn:active { transform: scale(0.98); }
+        .btn-record.recording { background: #3a0000; border-color: var(--highlight-red); color: var(--highlight-red); }
+        .btn-auto.active { background: #002200; border-color: var(--highlight-green); color: var(--highlight-green); }
+
+        /* 태그 패널 */
+        .tags-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+        .tag-btn { 
+            background: #333; color: #ddd; border: none; padding: 6px 12px; 
+            border-radius: 20px; font-size: 0.8rem; cursor: pointer; white-space: nowrap;
+        }
+        .tag-btn:hover { background: #444; }
+
+    </style>
 </head>
-<body class="flex flex-col h-screen font-sans">
+<body>
 
-  <header class="p-4 bg-black border-b border-gray-800 flex justify-between items-center z-10 relative">
-    <h1 class="text-xl font-semibold tracking-wider flex items-center gap-2">
-      <span class="w-3 h-3 bg-white rounded-full inline-block"></span>
-      CrystalTory<span class="text-gray-400 font-light">_Motion</span>
-    </h1>
-    <div class="flex gap-3 items-center">
-      <label class="px-3 py-1.5 bg-gray-800 text-sm rounded cursor-pointer hover:bg-gray-700 transition">
-        📁 영상 열기
-        <input type="file" id="videoUpload" accept="video/*" class="hidden" />
-      </label>
-      
-      <button id="btnRecord" class="px-4 py-2 rounded-full text-sm transition-all bg-gray-800 text-white hover:bg-gray-700">
-        ⏺ 경로 기록 시작
-      </button>
-      
-      <button id="btnAutoPlay" class="px-4 py-2 rounded-full text-sm transition-all bg-gray-800 text-white opacity-50 cursor-not-allowed" disabled>
-        👆 수동 모드
-      </button>
+<header>
+    <div class="logo">CrystalTory <span>Motion</span></div>
+    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 작업실 (V4.0) 🐾</div>
+</header>
+
+<main>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <input type="file" id="videoUpload" accept="video/*" style="font-size: 0.85rem;">
+        <span id="recordStatus" style="font-size: 0.8rem; color: var(--highlight-red); display: none;">● 녹화 중</span>
     </div>
-  </header>
 
-  <main class="flex-1 relative bg-black flex justify-center items-center overflow-hidden" id="canvasContainer">
-    <video id="videoElement" class="hidden" controls></video>
-    
-    <canvas id="mainCanvas" class="w-full h-full cursor-grab"></canvas>
-
-    <div class="absolute bottom-6 right-6 bg-black/60 p-2 rounded-xl backdrop-blur-sm border border-gray-800 flex flex-col gap-2 z-10">
-      <button id="btnZoomIn" class="w-10 h-10 bg-gray-800 rounded-lg hover:bg-gray-700 font-bold">+</button>
-      <span id="zoomDisplay" class="text-center text-xs text-gray-400">2.0x</span>
-      <button id="btnZoomOut" class="w-10 h-10 bg-gray-800 rounded-lg hover:bg-gray-700 font-bold">-</button>
+    <div class="player-container" id="playerContainer">
+        <canvas id="motionCanvas"></canvas>
     </div>
-  </main>
 
-  <footer class="h-32 bg-[#1A1A1A] border-t border-gray-800 p-4 flex flex-col justify-center z-10 relative">
-    <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" id="tagButtonsContainer">
-      </div>
-    <div id="savedTagsDisplay" class="text-xs text-gray-500 mt-2 flex gap-3 overflow-x-auto whitespace-nowrap">
-      </div>
-  </footer>
+    <div class="tags-container" id="tagsContainer">
+        </div>
 
-  <script>
-    // --- 상태 변수 (State) ---
-    let zoom = 2.0;
-    let pan = { x: 0, y: 0 };
-    let isDragging = false;
-    let dragStart = { x: 0, y: 0 };
+    <div class="control-panel">
+        <div class="seek-container">
+            <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:1.2rem; cursor:pointer;">▶</button>
+            <input type="range" id="seekBar" value="0" step="0.1">
+            <span id="timeDisplay" style="font-size:0.75rem; min-width:75px;">00:00 / 00:00</span>
+        </div>
 
-    let isRecording = false;
-    let isAutoPlay = false;
-    let recordedPath = [];
-    let savedTags = [];
-    let requestRef;
+        <div class="sliders-group">
+            <div class="slider-row">
+                <label>줌 배율</label>
+                <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1">
+                <span class="val-display" id="zoomVal">1.0x</span>
+            </div>
+            <div class="slider-row">
+                <label>드래그 감도</label>
+                <input type="range" id="panRange" min="1" max="5" step="0.5" value="2.5">
+                <span class="val-display" id="panVal">2.5x</span>
+            </div>
+        </div>
+        
+        <div class="btn-group">
+            <button id="btnRecord" class="action-btn btn-record" onclick="toggleRecord()">⏺ 궤적 녹화</button>
+            <button id="btnAuto" class="action-btn btn-auto" onclick="toggleAutoTrack()">🤖 오토 트래킹</button>
+            <button class="action-btn" onclick="resetCenter()">🎯 중앙 초기화</button>
+        </div>
+    </div>
+</main>
 
-    const MOTION_TAGS = ['스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시'];
+<video id="hiddenVideo" style="display:none;"></video>
 
-    // --- DOM 요소 ---
-    const video = document.getElementById('videoElement');
-    const canvas = document.getElementById('mainCanvas');
+<script>
+    const video = document.getElementById('hiddenVideo');
+    const canvas = document.getElementById('motionCanvas');
     const ctx = canvas.getContext('2d');
-    const canvasContainer = document.getElementById('canvasContainer');
-    
-    const btnRecord = document.getElementById('btnRecord');
-    const btnAutoPlay = document.getElementById('btnAutoPlay');
-    const zoomDisplay = document.getElementById('zoomDisplay');
-    const tagContainer = document.getElementById('tagButtonsContainer');
-    const tagsDisplay = document.getElementById('savedTagsDisplay');
+    const seekBar = document.getElementById('seekBar');
+    const zoomRange = document.getElementById('zoomRange');
+    const zoomVal = document.getElementById('zoomVal');
+    const panRange = document.getElementById('panRange');
+    const panVal = document.getElementById('panVal');
     const videoUpload = document.getElementById('videoUpload');
+    const playBtn = document.getElementById('playBtn');
+    const playerContainer = document.getElementById('playerContainer');
+    const btnRecord = document.getElementById('btnRecord');
+    const btnAuto = document.getElementById('btnAuto');
+    const recordStatus = document.getElementById('recordStatus');
 
-    // --- 비디오 업로드 로직 ---
-    videoUpload.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const fileURL = URL.createObjectURL(file);
-        video.src = fileURL;
-        video.play();
-      }
+    let zoom = 1.0;
+    let panSensitivity = 2.5; 
+    
+    let centerX = 0;
+    let centerY = 0;
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    // V4.0: 트래킹 데이터 및 상태 변수
+    let isRecording = false;
+    let isAutoTracking = false;
+    let trackData = []; // { time, x, y } 객체 배열
+    let motionTags = []; // 찍은 태그 배열
+
+    const TAG_LIST = ['스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시'];
+
+    // 태그 버튼 생성
+    const tagsContainer = document.getElementById('tagsContainer');
+    TAG_LIST.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.className = 'tag-btn';
+        btn.innerText = tag;
+        btn.onclick = () => {
+            motionTags.push({ time: video.currentTime, tag: tag });
+            console.log(`[${formatTime(video.currentTime)}] ${tag} 태그 저장됨!`);
+            // 시각적 피드백
+            btn.style.background = 'var(--highlight-green)';
+            btn.style.color = '#000';
+            setTimeout(() => { btn.style.background = '#333'; btn.style.color = '#ddd'; }, 300);
+        };
+        tagsContainer.appendChild(btn);
     });
 
-    // --- 캔버스 렌더링 루프 ---
-    function renderFrame() {
-      if (!video.paused && !video.ended && video.readyState === 4) {
-        canvas.width = canvasContainer.clientWidth;
-        canvas.height = canvasContainer.clientHeight;
+    videoUpload.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            video.src = URL.createObjectURL(file);
+            video.onloadedmetadata = () => {
+                seekBar.max = video.duration;
+                centerX = video.videoWidth / 2;
+                centerY = video.videoHeight / 2;
+                trackData = []; // 새 영상 로드 시 기록 초기화
+                render();
+            };
+        }
+    });
 
-        let currentPan = { ...pan };
+    // --- 드래그 이벤트 (V3.3 동일 + 기록 로직 추가) ---
+    playerContainer.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', drag);
+    window.addEventListener('mouseup', endDrag);
 
-        // Auto-Pan 로직: 기록된 경로에서 현재 영상 시간에 맞는 좌표 찾기
-        if (isAutoPlay && recordedPath.length > 0) {
-          const currentTime = video.currentTime;
-          let closestPoint = recordedPath[0];
-          let minDiff = Math.abs(closestPoint.time - currentTime);
-          
-          for (let i = 1; i < recordedPath.length; i++) {
-            const diff = Math.abs(recordedPath[i].time - currentTime);
-            if (diff < minDiff) {
-              minDiff = diff;
-              closestPoint = recordedPath[i];
+    playerContainer.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
+    window.addEventListener('touchmove', (e) => {
+        if(isDragging) e.preventDefault();
+        drag(e.touches[0]);
+    }, {passive: false});
+    window.addEventListener('touchend', endDrag);
+
+    function startDrag(e) {
+        if (isAutoTracking) return; // 오토 트래킹 중에는 수동 조작 금지
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    }
+
+    function drag(e) {
+        if (!isDragging || isAutoTracking) return;
+        
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+
+        const displayWidth = playerContainer.offsetWidth;
+        const scale = ((video.videoWidth / zoom) / displayWidth) * panSensitivity;
+        
+        centerX -= dx * scale;
+        centerY -= dy * scale;
+
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+
+        // 녹화 중이면 현재 시간과 중심 좌표를 저장
+        if (isRecording && !video.paused) {
+            trackData.push({ time: video.currentTime, x: centerX, y: centerY });
+        }
+    }
+
+    function endDrag() { isDragging = false; }
+
+    // --- 버튼 컨트롤 함수 ---
+    function resetCenter() {
+        centerX = video.videoWidth / 2;
+        centerY = video.videoHeight / 2;
+    }
+
+    function togglePlay() {
+        if (video.paused) { video.play(); playBtn.innerText = "Ⅱ"; }
+        else { video.pause(); playBtn.innerText = "▶"; }
+    }
+
+    function toggleRecord() {
+        isRecording = !isRecording;
+        if (isRecording) {
+            isAutoTracking = false; // 녹화 시 오토트래킹 해제
+            btnAuto.classList.remove('active');
+            btnRecord.classList.add('recording');
+            btnRecord.innerText = "⏹ 녹화 종료";
+            recordStatus.style.display = "inline";
+            if(video.paused) togglePlay(); // 자동 재생
+        } else {
+            btnRecord.classList.remove('recording');
+            btnRecord.innerText = "⏺ 궤적 녹화";
+            recordStatus.style.display = "none";
+            // 데이터 정렬
+            trackData.sort((a, b) => a.time - b.time);
+            console.log("기록된 데이터 개수:", trackData.length);
+        }
+    }
+
+    function toggleAutoTrack() {
+        if (trackData.length === 0) {
+            alert("먼저 '궤적 녹화'를 통해 라이더를 따라가 주세요!");
+            return;
+        }
+        isAutoTracking = !isAutoTracking;
+        if (isAutoTracking) {
+            isRecording = false;
+            btnRecord.classList.remove('recording');
+            btnRecord.innerText = "⏺ 궤적 녹화";
+            recordStatus.style.display = "none";
+            btnAuto.classList.add('active');
+            btnAuto.innerText = "🤖 오토 트래킹 켬";
+        } else {
+            btnAuto.classList.remove('active');
+            btnAuto.innerText = "🤖 오토 트래킹";
+        }
+    }
+
+    // --- 스무딩 (선형 보간법) 계산 엔진 ---
+    function getSmoothedCoordinates(currentTime) {
+        if (trackData.length === 0) return { x: centerX, y: centerY };
+        if (trackData.length === 1) return trackData[0];
+
+        let prev = trackData[0];
+        let next = trackData[trackData.length - 1];
+
+        // 현재 시간과 가장 가까운 앞뒤 기록을 찾음
+        for (let i = 0; i < trackData.length - 1; i++) {
+            if (trackData[i].time <= currentTime && trackData[i+1].time >= currentTime) {
+                prev = trackData[i];
+                next = trackData[i+1];
+                break;
             }
-          }
-          currentPan = { x: closestPoint.x, y: closestPoint.y };
-          pan = currentPan; // 수동 모드 전환 시 부드럽게 이어지도록 상태 동기화
         }
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
+        if (prev === next || currentTime <= prev.time) return prev;
+        if (currentTime >= next.time) return next;
+
+        // 두 좌표 사이를 시간에 비례해 부드럽게 이어줌 (Lerp)
+        const t = (currentTime - prev.time) / (next.time - prev.time);
+        const smoothX = prev.x + (next.x - prev.x) * t;
+        const smoothY = prev.y + (next.y - prev.y) * t;
         
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.scale(zoom, zoom);
-        ctx.translate(-canvas.width / 2 + currentPan.x, -canvas.height / 2 + currentPan.y);
-        
-        const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-        const x = (canvas.width / 2) - (video.videoWidth / 2) * scale;
-        const y = (canvas.height / 2) - (video.videoHeight / 2) * scale;
-        
-        ctx.drawImage(video, x, y, video.videoWidth * scale, video.videoHeight * scale);
-        ctx.restore();
-      }
-      requestRef = requestAnimationFrame(renderFrame);
+        return { x: smoothX, y: smoothY };
     }
 
-    video.addEventListener('play', () => {
-      if(requestRef) cancelAnimationFrame(requestRef);
-      renderFrame();
-    });
+    // --- 이벤트 리스너 ---
+    seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
+    zoomRange.addEventListener('input', (e) => { zoom = e.target.value; zoomVal.innerText = zoom + 'x'; });
+    panRange.addEventListener('input', (e) => { panSensitivity = e.target.value; panVal.innerText = panSensitivity + 'x'; });
 
-    // --- 수동 드래그 및 경로 기록 ---
-    function getPointerPos(e) {
-      return {
-        x: e.touches ? e.touches[0].clientX : e.clientX,
-        y: e.touches ? e.touches[0].clientY : e.clientY
-      };
-    }
+    // --- 메인 렌더링 루프 ---
+    function render() {
+        if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
 
-    function handlePointerDown(e) {
-      if (isAutoPlay) return;
-      isDragging = true;
-      canvas.classList.add('cursor-grabbing');
-      const pos = getPointerPos(e);
-      dragStart = { x: pos.x - pan.x, y: pos.y - pan.y };
-    }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-    function handlePointerMove(e) {
-      if (!isDragging || isAutoPlay) return;
-      const pos = getPointerPos(e);
-      pan = { x: pos.x - dragStart.x, y: pos.y - dragStart.y };
-
-      // 기록 중일 때 좌표와 시간 저장
-      if (isRecording && video.readyState === 4) {
-        recordedPath.push({ time: video.currentTime, x: pan.x, y: pan.y });
-        
-        // Auto-Pan 버튼 활성화
-        if (recordedPath.length > 0 && btnAutoPlay.disabled) {
-          btnAutoPlay.disabled = false;
-          btnAutoPlay.classList.remove('opacity-50', 'cursor-not-allowed');
-          btnAutoPlay.classList.add('hover:bg-gray-700');
+        // 오토 트래킹 모드일 때 스무딩 좌표 적용
+        if (isAutoTracking && !isDragging) {
+            const coords = getSmoothedCoordinates(video.currentTime);
+            centerX = coords.x;
+            centerY = coords.y;
         }
-      }
+
+        const viewWidth = canvas.width / zoom;
+        const viewHeight = canvas.height / zoom;
+
+        // 화면 밖으로 나가지 않게 보정
+        centerX = Math.max(viewWidth / 2, Math.min(canvas.width - viewWidth / 2, centerX));
+        centerY = Math.max(viewHeight / 2, Math.min(canvas.height - viewHeight / 2, centerY));
+
+        const sx = centerX - viewWidth / 2;
+        const sy = centerY - viewHeight / 2;
+
+        ctx.drawImage(video, sx, sy, viewWidth, viewHeight, 0, 0, canvas.width, canvas.height);
+        
+        if (!video.paused) { seekBar.value = video.currentTime; }
+        document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
+        
+        requestAnimationFrame(render);
     }
 
-    function handlePointerUp() {
-      isDragging = false;
-      canvas.classList.remove('cursor-grabbing');
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return "00:00";
+        const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60);
+        return m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0');
     }
-
-    canvas.addEventListener('mousedown', handlePointerDown);
-    canvas.addEventListener('mousemove', handlePointerMove);
-    window.addEventListener('mouseup', handlePointerUp);
-
-    canvas.addEventListener('touchstart', handlePointerDown, { passive: true });
-    canvas.addEventListener('touchmove', handlePointerMove, { passive: true });
-    window.addEventListener('touchend', handlePointerUp);
-
-    // --- 버튼 이벤트 리스너 ---
-    document.getElementById('btnZoomIn').addEventListener('click', () => {
-      zoom = Math.min(zoom + 0.5, 4);
-      zoomDisplay.textContent = zoom.toFixed(1) + 'x';
-    });
-
-    document.getElementById('btnZoomOut').addEventListener('click', () => {
-      zoom = Math.max(zoom - 0.5, 1);
-      zoomDisplay.textContent = zoom.toFixed(1) + 'x';
-    });
-
-    btnRecord.addEventListener('click', () => {
-      isRecording = !isRecording;
-      if (isRecording) {
-        btnRecord.textContent = '🔴 경로 기록 중...';
-        btnRecord.className = 'px-4 py-2 rounded-full text-sm transition-all bg-red-900 text-red-200 border border-red-500';
-      } else {
-        btnRecord.textContent = '⏺ 경로 기록 시작';
-        btnRecord.className = 'px-4 py-2 rounded-full text-sm transition-all bg-gray-800 text-white hover:bg-gray-700';
-      }
-    });
-
-    btnAutoPlay.addEventListener('click', () => {
-      if (recordedPath.length === 0) return;
-      isAutoPlay = !isAutoPlay;
-      if (isAutoPlay) {
-        btnAutoPlay.textContent = '🤖 Auto-Pan 켜짐';
-        btnAutoPlay.className = 'px-4 py-2 rounded-full text-sm transition-all bg-blue-900 text-blue-200 border border-blue-500';
-      } else {
-        btnAutoPlay.textContent = '👆 수동 모드';
-        btnAutoPlay.className = 'px-4 py-2 rounded-full text-sm transition-all bg-gray-800 text-white hover:bg-gray-700';
-      }
-    });
-
-    // --- 태그 UI 생성 및 로직 ---
-    function updateTagsDisplay() {
-      tagsDisplay.innerHTML = savedTags.map(t => 
-        `<span>[${t.time.toFixed(1)}s] ${t.tag}</span>`
-      ).join('');
-    }
-
-    MOTION_TAGS.forEach(tag => {
-      const btn = document.createElement('button');
-      btn.textContent = tag;
-      btn.className = "whitespace-nowrap px-5 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700 transition-colors shadow-sm";
-      btn.addEventListener('click', () => {
-        if (video.readyState === 4) {
-          savedTags.push({ tag: tag, time: video.currentTime });
-          savedTags.sort((a, b) => a.time - b.time);
-          updateTagsDisplay();
-        }
-      });
-      tagContainer.appendChild(btn);
-    });
-
-  </script>
+</script>
 </body>
 </html>
