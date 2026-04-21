@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V3.2 (Smooth Pan & Zoom)</title>
+    <title>CrystalTory_Motion V3.3 (Pan Booster)</title>
     <style>
         :root {
             --tuxedo-black: #0a0a0a; --tuxedo-dark: #1a1a1a;
@@ -39,8 +39,16 @@
         .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; }
         .seek-container { display: flex; align-items: center; gap: 10px; }
         #seekBar { flex: 1; cursor: pointer; accent-color: var(--highlight-green); }
-        .zoom-container { display: flex; align-items: center; gap: 15px; font-size: 0.9rem; color: var(--point-silver); }
-        #zoomRange { flex: 1; accent-color: var(--tuxedo-white); }
+        
+        /* 슬라이더 컨트롤 영역 패키징 */
+        .sliders-group {
+            display: flex; flex-direction: column; gap: 12px; 
+            background: #111; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+        }
+        .slider-row { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; color: var(--point-silver); }
+        .slider-row label { min-width: 60px; font-weight: bold; }
+        input[type=range] { flex: 1; accent-color: var(--tuxedo-white); }
+        .val-display { min-width: 35px; text-align: right; color: var(--highlight-green); font-weight: bold; }
 
         .guide-text { font-size: 0.85rem; color: #888; text-align: center; margin-top: 5px; }
     </style>
@@ -49,7 +57,7 @@
 
 <header>
     <div class="logo">CRYSTAL TORY <span>MOTION</span></div>
-    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 작업실 (V3.2) 🐾</div>
+    <div style="font-size: 0.8rem; color: var(--point-silver);">수정아빠의 작업실 (V3.3) 🐾</div>
 </header>
 
 <main>
@@ -59,7 +67,7 @@
         <canvas id="motionCanvas"></canvas>
     </div>
     
-    <p class="guide-text">💡 <b>화면을 드래그</b>하여 라이더를 따라가고, <b>아래 슬라이더로 줌</b>을 조절하세요.</p>
+    <p class="guide-text">💡 줌을 최대로 당겼을 때 느리다면 <b>'드래그 감도'</b>를 올려보세요!</p>
 
     <div class="control-panel">
         <div class="seek-container">
@@ -68,13 +76,20 @@
             <span id="timeDisplay" style="font-size:0.75rem; min-width:75px;">00:00 / 00:00</span>
         </div>
 
-        <div class="zoom-container">
-            <span>ZOOM</span>
-            <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1">
-            <span id="zoomVal">1.0x</span>
+        <div class="sliders-group">
+            <div class="slider-row">
+                <label>줌 배율</label>
+                <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1">
+                <span class="val-display" id="zoomVal">1.0x</span>
+            </div>
+            <div class="slider-row">
+                <label>드래그 감도</label>
+                <input type="range" id="panRange" min="1" max="5" step="0.5" value="2.5">
+                <span class="val-display" id="panVal">2.5x</span>
+            </div>
         </div>
         
-        <button onclick="resetCenter()" style="background:#222; color:white; border:1px solid #444; padding:8px; border-radius:6px; margin-top:5px;">정중앙으로 초기화</button>
+        <button onclick="resetCenter()" style="background:#222; color:white; border:1px solid #444; padding:10px; border-radius:6px; margin-top:5px; cursor:pointer; font-weight:bold;">🎯 정중앙으로 초기화</button>
     </div>
 </main>
 
@@ -87,16 +102,17 @@
     const seekBar = document.getElementById('seekBar');
     const zoomRange = document.getElementById('zoomRange');
     const zoomVal = document.getElementById('zoomVal');
+    const panRange = document.getElementById('panRange');
+    const panVal = document.getElementById('panVal');
     const videoUpload = document.getElementById('videoUpload');
     const playBtn = document.getElementById('playBtn');
     const playerContainer = document.getElementById('playerContainer');
 
     let zoom = 1.0;
+    let panSensitivity = 2.5; // 드래그 부스터 기본값 (2.5배 빠름)
     
-    // 비디오 원본 기준 중심 좌표 (이 좌표가 화면의 정중앙에 오도록 그립니다)
     let centerX = 0;
     let centerY = 0;
-
     let isDragging = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
@@ -114,14 +130,13 @@
         }
     });
 
-    // 🖐️ 완벽하게 수정된 수동 드래그(Pan) 로직
     playerContainer.addEventListener('mousedown', startDrag);
     window.addEventListener('mousemove', drag);
     window.addEventListener('mouseup', endDrag);
 
     playerContainer.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
     window.addEventListener('touchmove', (e) => {
-        if(isDragging) e.preventDefault(); // 스크롤 방지
+        if(isDragging) e.preventDefault();
         drag(e.touches[0]);
     }, {passive: false});
     window.addEventListener('touchend', endDrag);
@@ -135,17 +150,14 @@
     function drag(e) {
         if (!isDragging) return;
         
-        // 이동한 픽셀 거리 계산
         const dx = e.clientX - lastMouseX;
         const dy = e.clientY - lastMouseY;
 
-        // 핵심 수학 고침: 
-        // 화면에서 dx만큼 움직였을 때, 원본 비디오 기준으로는 얼마나 움직인 것인가?
-        // (비디오원본너비 / 줌배율) / 화면너비 = 화면 1픽셀당 비디오 픽셀 수
         const displayWidth = playerContainer.offsetWidth;
-        const scale = (video.videoWidth / zoom) / displayWidth;
         
-        // 마우스를 왼쪽으로 밀면(dx가 음수) 화면은 오른쪽을 보여줘야 하므로 빼줍니다.
+        // 🚀 핵심 변경: 드래그 감도(panSensitivity)를 곱해서 이동 속도를 증폭시킵니다!
+        const scale = ((video.videoWidth / zoom) / displayWidth) * panSensitivity;
+        
         centerX -= dx * scale;
         centerY -= dy * scale;
 
@@ -172,25 +184,26 @@
         zoomVal.innerText = zoom + 'x'; 
     });
 
+    panRange.addEventListener('input', (e) => { 
+        panSensitivity = e.target.value; 
+        panVal.innerText = panSensitivity + 'x'; 
+    });
+
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
 
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        // 현재 줌 배율에 맞춰 보여줄 비디오 영역의 너비와 높이
         const viewWidth = canvas.width / zoom;
         const viewHeight = canvas.height / zoom;
 
-        // 캔버스 경계선 밖으로 나가지 않도록 좌표 꽉 잡아주기
         centerX = Math.max(viewWidth / 2, Math.min(canvas.width - viewWidth / 2, centerX));
         centerY = Math.max(viewHeight / 2, Math.min(canvas.height - viewHeight / 2, centerY));
 
-        // 자를 영역의 좌측 상단 좌표 계산
         const sx = centerX - viewWidth / 2;
         const sy = centerY - viewHeight / 2;
 
-        // 그리기 (마법이 일어나는 곳)
         ctx.drawImage(video, sx, sy, viewWidth, viewHeight, 0, 0, canvas.width, canvas.height);
         
         if (!video.paused) { seekBar.value = video.currentTime; }
