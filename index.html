@@ -176,21 +176,21 @@
 
     let model = null;
     let isAITracking = false;
+    let isDetecting = false; // 🔒 과부하 방지용 잠금장치 (추가됨!)
+    let aiStatusText = "대기 중"; // AI 상태 표시 텍스트
     let zoom = 1.5;
     
-    // 추적 좌표 스무딩(Smoothing)을 위한 변수들 (like Colab Kalman filter)
     let currentCenterX = 0;
     let currentCenterY = 0;
     let targetCenterX = 0;
     let targetCenterY = 0;
-    const smoothingFactor = 0.1; // 0.1 ~ 1.0 (낮을수록 부드럽지만 느림)
+    const smoothingFactor = 0.05; // 더 부드럽게 이동하도록 수치 조정
 
-    // AI 모델 로딩 (TensorFlow.js + COCO-SSD)
     async function loadModel() {
         loadingStatus.style.display = 'block';
         model = await cocoSsd.load();
         loadingStatus.style.display = 'none';
-        console.log("AI Model Loaded: Tory-Tracker v3.0");
+        console.log("AI Model Loaded: Tory-Tracker v3.0.1");
     }
     loadModel();
 
@@ -200,7 +200,6 @@
             video.src = URL.createObjectURL(file);
             video.onloadedmetadata = () => {
                 seekBar.max = video.duration;
-                // 초기 중심 좌표 설정
                 currentCenterX = targetCenterX = video.videoWidth / 2;
                 currentCenterY = targetCenterY = video.videoHeight / 2;
                 render();
@@ -220,9 +219,8 @@
         zoomVal.innerText = zoom + 'x';
     });
 
-    // AI 추적 토글
     function toggleAITracking() {
-        if (!model) { alert("AI 모델이 아직 로딩 중입니다."); return; }
+        if (!model) { alert("AI 모델이 아직 로딩 중입니다. 잠시만 기다려주세요!"); return; }
         isAITracking = !isAITracking;
         if (isAITracking) {
             aiTrackBtn.innerText = "AI 추적 중... (Ⅱ 중지)";
@@ -230,6 +228,7 @@
         } else {
             aiTrackBtn.innerText = "AI 추적 시작 (Rider Tracking)";
             aiTrackBtn.classList.remove('active');
+            aiStatusText = "추적 중지됨";
         }
     }
 
@@ -239,24 +238,36 @@
         aiTrackBtn.classList.remove('active');
         targetCenterX = video.videoWidth / 2;
         targetCenterY = video.videoHeight / 2;
+        aiStatusText = "초기화됨";
     }
 
-    // 🧠 AI 분석 기능 (핵심: 저해상도 프록시 분석으로 성능 확보)
+    // 🧠 AI 분석 핵심 로직 개선
     async function detectFrame() {
-        if (!isAITracking || video.paused || video.ended) return;
-
-        // 원본 대신 캔버스 크기(또는 더 작게)로 줄여서 AI에게 보여줍니다 (성능 팁)
-        const predictions = await model.detect(canvas);
+        // 이미 분석 중이거나 멈춰있으면 무시 (과부하 방지)
+        if (!isAITracking || video.paused || video.ended || isDetecting) return;
         
-        // 'person' (라이더) 중에서 가장 확신이 높은 객체 찾기
-        const person = predictions.filter(p => p.class === 'person')
-                                  .sort((a, b) => b.score - a.score)[0];
+        isDetecting = true; // 분석 시작 (문 잠금)
 
-        if (person) {
-            const [x, y, width, height] = person.bbox;
-            // 라이더의 중심 좌표 계산 (target)
-            targetCenterX = x + width / 2;
-            targetCenterY = y + height / 2;
+        try {
+            // 캔버스가 아닌 '원본 영상'을 기준으로 찾습니다.
+            const predictions = await model.detect(video);
+            
+            // 사람, 서프보드, 배 중에서 가장 확률 높은 것 찾기
+            const target = predictions.filter(p => ['person', 'surfboard', 'boat'].includes(p.class))
+                                      .sort((a, b) => b.score - a.score)[0];
+
+            if (target) {
+                const [x, y, width, height] = target.bbox;
+                targetCenterX = x + width / 2;
+                targetCenterY = y + height / 2;
+                aiStatusText = `🎯 찾음! (${target.class})`;
+            } else {
+                aiStatusText = `👀 찾는 중... (너무 작음)`;
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            isDetecting = false; // 분석 완료 (문 열림)
         }
     }
 
@@ -266,16 +277,16 @@
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        // AI 분석 실행 (매 프레임 대신 비동기로 호출하여 성능 저하 방지)
-        if (isAITracking && video.currentTime > 0) {
-            detectFrame();
-        }
+        // AI 추적 호출
+        if (isAITracking) { detectFrame(); }
 
-        // 스무딩 로직 적용 (like Kalman filter)
         currentCenterX += (targetCenterX - currentCenterX) * smoothingFactor;
         currentCenterY += (targetCenterY - currentCenterY) * smoothingFactor;
 
-        // 줌/크롭 좌표 계산
+        // 화면 밖으로 안 나가게 보정
+        currentCenterX = Math.max(canvas.width/zoom/2, Math.min(canvas.width - canvas.width/zoom/2, currentCenterX));
+        currentCenterY = Math.max(canvas.height/zoom/2, Math.min(canvas.height - canvas.height/zoom/2, currentCenterY));
+
         const sw = canvas.width / zoom;
         const sh = canvas.height / zoom;
         const sx = currentCenterX - sw / 2;
@@ -283,6 +294,15 @@
 
         ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
         
+        // AI 상태 텍스트 그리기 (화면 우측 상단)
+        if (isAITracking) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+            ctx.fillRect(canvas.width - 160, 10, 150, 30);
+            ctx.fillStyle = "#bfff00";
+            ctx.font = "16px Pretendard";
+            ctx.fillText(aiStatusText, canvas.width - 150, 30);
+        }
+
         if (!video.paused) { seekBar.value = video.currentTime; }
         
         document.getElementById('timeDisplay').innerText = 
