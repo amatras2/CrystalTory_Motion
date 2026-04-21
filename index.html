@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V4.6 (Sniper Tracking)</title>
+    <title>CrystalTory_Motion V4.7 (Turbo AI Engine)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -33,14 +33,12 @@
         .player-container {
             position: relative; background: #000; border-radius: 12px;
             overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border);
-            cursor: grab; flex-shrink: 0;
-            transition: border-color 0.2s;
+            cursor: grab; flex-shrink: 0; transition: border-color 0.2s;
         }
         .player-container:active { cursor: grabbing; }
 
         #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
         
-        /* 스나이퍼 타겟팅 시각효과 */
         .crosshair {
             position: absolute; top: 50%; left: 50%; width: 30px; height: 30px;
             border: 2px solid rgba(191, 255, 0, 0.4); transform: translate(-50%, -50%);
@@ -50,7 +48,6 @@
             content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
             background: rgba(191, 255, 0, 0.8); border-radius: 50%; transform: translate(-50%, -50%);
         }
-        /* AI가 놓쳤을 때 빨간색으로 변경 */
         .crosshair.lost { border-color: rgba(255, 71, 87, 0.4); }
         .crosshair.lost::after { background: rgba(255, 71, 87, 0.8); }
 
@@ -74,7 +71,6 @@
         }
         .action-btn:active { transform: scale(0.98); }
         .btn-ai.active { background: #002200; border-color: var(--highlight-green); color: var(--highlight-green); }
-
     </style>
 </head>
 <body>
@@ -82,8 +78,8 @@
 <header>
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
-        <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V4.6 🐾</div>
+        <span id="aiStatus" class="status-badge">🧠 엔진 예열 중...</span>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V4.7 🚀</div>
     </div>
 </header>
 
@@ -97,7 +93,7 @@
         <div class="crosshair" id="crosshair"></div>
     </div>
 
-    <p style="font-size: 0.8rem; color: #888; text-align: center;">💡 인식이 튀면 라이더를 화면 <b>중앙</b>으로 드래그해 '타겟'을 알려주세요.</p>
+    <p style="font-size: 0.8rem; color: #888; text-align: center;">💡 영상 재생 중 라이더를 <b>중앙으로 한 번만 쓱 드래그</b>해서 AI에게 알려주세요.</p>
 
     <div class="control-panel">
         <div class="seek-container">
@@ -120,7 +116,7 @@
         </div>
         
         <div class="btn-group">
-            <button id="btnAiTrack" class="action-btn btn-ai active" onclick="toggleAITracking()">🤖 스마트 트래킹 ON</button>
+            <button id="btnAiTrack" class="action-btn btn-ai active" onclick="toggleAITracking()">🤖 터보 트래킹 ON</button>
             <button class="action-btn" onclick="resetCenter()">🎯 중앙 초기화</button>
         </div>
     </div>
@@ -144,9 +140,7 @@
     const btnAiTrack = document.getElementById('btnAiTrack');
     const crosshair = document.getElementById('crosshair');
 
-    let zoom = 2.5;
-    let panSensitivity = 2.5; 
-    
+    let zoom = 2.5; let panSensitivity = 2.5; 
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
 
@@ -155,24 +149,21 @@
 
     let model = null;
     let isAITracking = true;
-    let isDetecting = false;
-    let targetLostFrames = 0; // 타겟을 놓친 프레임 수 카운팅
+    let isDetecting = false; 
+    let targetLostFrames = 0;
 
     // 1. 모델 로드
     cocoSsd.load().then(loadedModel => {
         model = loadedModel;
-        updateStatus("🟢 대기 중", "var(--highlight-green)");
+        updateStatus("🟢 터보 준비 완료", "var(--highlight-green)");
     });
 
     function updateStatus(text, color, isLost = false) {
         aiStatus.innerText = text;
         aiStatus.style.background = color;
         aiStatus.style.color = "#000";
-        if (isLost) {
-            crosshair.classList.add('lost');
-        } else {
-            crosshair.classList.remove('lost');
-        }
+        if (isLost) crosshair.classList.add('lost');
+        else crosshair.classList.remove('lost');
     }
 
     videoUpload.addEventListener('change', function(e) {
@@ -183,51 +174,35 @@
                 seekBar.max = video.duration;
                 centerX = video.videoWidth / 2;
                 centerY = video.videoHeight / 2;
-                targetX = centerX;
-                targetY = centerY;
+                targetX = centerX; targetY = centerY;
                 render();
             };
         }
     });
 
-    // 2. 수동 개입 (드래그)
+    // 2. 수동 개입
     playerContainer.addEventListener('mousedown', startDrag);
     window.addEventListener('mousemove', drag);
     window.addEventListener('mouseup', endDrag);
-
     playerContainer.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
-    window.addEventListener('touchmove', (e) => {
-        if(isDragging) e.preventDefault();
-        drag(e.touches[0]);
-    }, {passive: false});
+    window.addEventListener('touchmove', (e) => { if(isDragging) e.preventDefault(); drag(e.touches[0]); }, {passive: false});
     window.addEventListener('touchend', endDrag);
 
     function startDrag(e) {
         isDragging = true;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-        playerContainer.style.borderColor = "var(--highlight-blue)"; // 보정 중엔 파란색 테두리
-        updateStatus("🖐 수동 보정 중", "var(--highlight-blue)");
+        lastMouseX = e.clientX; lastMouseY = e.clientY;
+        playerContainer.style.borderColor = "var(--highlight-blue)"; 
+        updateStatus("🖐 수동 가이드 중", "var(--highlight-blue)");
     }
 
     function drag(e) {
         if (!isDragging) return;
+        const dx = e.clientX - lastMouseX; const dy = e.clientY - lastMouseY;
+        const scale = ((video.videoWidth / zoom) / playerContainer.offsetWidth) * panSensitivity;
         
-        const dx = e.clientX - lastMouseX;
-        const dy = e.clientY - lastMouseY;
-
-        const displayWidth = playerContainer.offsetWidth;
-        const scale = ((video.videoWidth / zoom) / displayWidth) * panSensitivity;
-        
-        centerX -= dx * scale;
-        centerY -= dy * scale;
-        
-        // 보정된 위치를 새 타겟으로 강제 지정!
-        targetX = centerX;
-        targetY = centerY;
-
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
+        centerX -= dx * scale; centerY -= dy * scale;
+        targetX = centerX; targetY = centerY; // AI에게 새 기준점 제시
+        lastMouseX = e.clientX; lastMouseY = e.clientY;
     }
 
     function endDrag() { 
@@ -235,109 +210,79 @@
         playerContainer.style.borderColor = "var(--border)";
     }
 
-    // 3. AI 객체 인식 루프 (거리 기반 스나이퍼 로직 적용)
+    // 3. AI 객체 인식 함수 (비동기, 호출되는 즉시 최대로 일함)
     async function detectPerson() {
         if (!model || video.paused || isDetecting || !isAITracking || isDragging) return;
         
-        isDetecting = true;
+        isDetecting = true; // 중복 실행 방지 잠금
         try {
             const predictions = await model.detect(video);
-            
-            // 모든 '사람' 찾기
             const people = predictions.filter(p => p.class === 'person');
             
             if (people.length > 0) {
                 let bestPerson = null;
                 let minDistance = Infinity;
 
-                // V4.6 핵심: 발견된 사람 중 '현재 카메라 중심(수정아빠가 가이드한 곳)'과 가장 가까운 사람 찾기
+                // 내가 잡아준 중앙(centerX)과 가장 가까운 사람 찾기 (스나이퍼)
                 people.forEach(p => {
                     const px = p.bbox[0] + (p.bbox[2] / 2);
                     const py = p.bbox[1] + (p.bbox[3] / 2);
-                    
-                    // 피타고라스 정리로 두 점 사이의 거리 계산
                     const dist = Math.hypot(px - centerX, py - centerY);
-                    
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        bestPerson = p;
-                    }
+                    if (dist < minDistance) { minDistance = dist; bestPerson = p; }
                 });
 
                 if (bestPerson) {
-                    // 가장 가까운 사람을 새로운 타겟으로 지정
                     targetX = bestPerson.bbox[0] + (bestPerson.bbox[2] / 2);
                     targetY = bestPerson.bbox[1] + (bestPerson.bbox[3] / 2);
                     targetLostFrames = 0;
-                    updateStatus("🎯 타겟 추적 중", "var(--highlight-green)");
+                    updateStatus("🎯 터보 추적 중", "var(--highlight-green)");
                 }
             } else {
-                // 화면에서 사람을 완전히 놓친 경우
                 targetLostFrames++;
-                if (targetLostFrames > 5) { // 0.5초 이상 안 보이면
-                    updateStatus("⚠️ 타겟 놓침", "var(--highlight-red)", true);
-                    // 타겟을 놓치면 엉뚱한 곳으로 튀지 않고, 마지막으로 본 위치에 가만히 머물게 합니다.
-                    targetX = centerX; 
-                    targetY = centerY;
+                if (targetLostFrames > 3) { // 프레임 단위가 빨라졌으므로 3프레임만 놓쳐도 대기
+                    updateStatus("⚠️ 타겟 대기", "var(--highlight-red)", true);
+                    targetX = centerX; targetY = centerY;
                 }
             }
         } finally {
-            isDetecting = false;
+            isDetecting = false; // 분석 끝나면 잠금 해제
         }
     }
-
-    setInterval(detectPerson, 100); // 0.1초마다 분석
 
     // --- 버튼 컨트롤 ---
-    function resetCenter() {
-        targetX = video.videoWidth / 2;
-        targetY = video.videoHeight / 2;
-        centerX = targetX; centerY = targetY;
-    }
-
-    function togglePlay() {
-        if (video.paused) { video.play(); playBtn.innerText = "Ⅱ"; }
-        else { video.pause(); playBtn.innerText = "▶"; }
-    }
-
+    function resetCenter() { targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; centerX = targetX; centerY = targetY; }
+    function togglePlay() { video.paused ? (video.play(), playBtn.innerText = "Ⅱ") : (video.pause(), playBtn.innerText = "▶"); }
     function toggleAITracking() {
         isAITracking = !isAITracking;
-        if (isAITracking) {
-            btnAiTrack.classList.add('active');
-            btnAiTrack.innerText = "🤖 스마트 트래킹 ON";
-        } else {
-            btnAiTrack.classList.remove('active');
-            btnAiTrack.innerText = "🤖 AI 추적 OFF (수동)";
-            updateStatus("⚪ 대기 중", "#ddd");
-        }
+        if (isAITracking) { btnAiTrack.classList.add('active'); btnAiTrack.innerText = "🤖 터보 트래킹 ON"; } 
+        else { btnAiTrack.classList.remove('active'); btnAiTrack.innerText = "🤖 트래킹 OFF"; updateStatus("⚪ 대기 중", "#ddd"); }
     }
-
     seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
     zoomRange.addEventListener('input', (e) => { zoom = e.target.value; zoomVal.innerText = zoom + 'x'; });
     panRange.addEventListener('input', (e) => { panSensitivity = e.target.value; panVal.innerText = panSensitivity + 'x'; });
 
-    // --- 메인 렌더링 루프 ---
+    // 4. 메인 렌더링 & AI 터보 호출 융합
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        if (!isDragging) {
-            // 반응 속도를 0.15로 살짝 올려서 놓쳤을 때 더 빨리 캐치하게 수정
-            centerX += (targetX - centerX) * 0.15;
-            centerY += (targetY - centerY) * 0.15;
+        // 🚀 타이머(setInterval) 삭제! 화면이 그려지는 1/60초마다 AI에게 계속 일해달라고 조릅니다.
+        if (isAITracking && !video.paused && !isDragging) {
+            detectPerson(); 
         }
 
-        const viewWidth = canvas.width / zoom;
-        const viewHeight = canvas.height / zoom;
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
 
+        // 카메라 이동 (반응 속도를 0.25로 대폭 올려 더 빠릿하게 쫓아감)
+        if (!isDragging) {
+            centerX += (targetX - centerX) * 0.25;
+            centerY += (targetY - centerY) * 0.25;
+        }
+
+        const viewWidth = canvas.width / zoom; const viewHeight = canvas.height / zoom;
         centerX = Math.max(viewWidth / 2, Math.min(canvas.width - viewWidth / 2, centerX));
         centerY = Math.max(viewHeight / 2, Math.min(canvas.height - viewHeight / 2, centerY));
 
-        const sx = centerX - viewWidth / 2;
-        const sy = centerY - viewHeight / 2;
-
+        const sx = centerX - viewWidth / 2; const sy = centerY - viewHeight / 2;
         ctx.drawImage(video, sx, sy, viewWidth, viewHeight, 0, 0, canvas.width, canvas.height);
         
         if (!video.paused) { seekBar.value = video.currentTime; }
