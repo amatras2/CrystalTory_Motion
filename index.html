@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V4.7 (Turbo AI Engine)</title>
+    <title>CrystalTory_Motion V4.8 (Export & Tagging)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -26,14 +26,14 @@
         }
         .logo { font-size: 1.2rem; font-weight: 800; }
         .logo span { color: var(--point-silver); font-weight: 300; }
-        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #333; color: #aaa; transition: 0.3s; }
+        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #333; color: #aaa; }
 
         main { flex: 1; display: flex; flex-direction: column; padding: 15px; gap: 10px; overflow-y: auto; }
 
         .player-container {
             position: relative; background: #000; border-radius: 12px;
             overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border);
-            cursor: grab; flex-shrink: 0; transition: border-color 0.2s;
+            cursor: grab; flex-shrink: 0;
         }
         .player-container:active { cursor: grabbing; }
 
@@ -42,21 +42,23 @@
         .crosshair {
             position: absolute; top: 50%; left: 50%; width: 30px; height: 30px;
             border: 2px solid rgba(191, 255, 0, 0.4); transform: translate(-50%, -50%);
-            pointer-events: none; border-radius: 50%; transition: 0.2s;
+            pointer-events: none; border-radius: 50%;
         }
-        .crosshair::after {
-            content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
-            background: rgba(191, 255, 0, 0.8); border-radius: 50%; transform: translate(-50%, -50%);
+
+        /* 하단 태그 패널 */
+        .tags-container { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0; scrollbar-width: none; }
+        .tag-btn { 
+            background: #222; color: #ddd; border: 1px solid #444; padding: 8px 15px; 
+            border-radius: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; transition: 0.2s;
         }
-        .crosshair.lost { border-color: rgba(255, 71, 87, 0.4); }
-        .crosshair.lost::after { background: rgba(255, 71, 87, 0.8); }
+        .tag-btn:active { background: var(--highlight-green); color: black; }
 
         .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;}
         .seek-container { display: flex; align-items: center; gap: 10px; }
         #seekBar { flex: 1; cursor: pointer; accent-color: var(--highlight-green); }
         
         .sliders-group {
-            display: flex; flex-direction: column; gap: 12px; 
+            display: flex; flex-direction: column; gap: 10px; 
             background: #111; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
         }
         .slider-row { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; color: var(--point-silver); }
@@ -64,13 +66,12 @@
         input[type=range] { flex: 1; accent-color: var(--tuxedo-white); }
         .val-display { min-width: 35px; text-align: right; color: var(--highlight-green); font-weight: bold; }
 
-        .btn-group { display: flex; gap: 10px; margin-top: 5px; }
+        .btn-group { display: flex; gap: 10px; }
         .action-btn { 
             flex: 1; background: #222; color: white; border: 1px solid #444; 
-            padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s;
+            padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem;
         }
-        .action-btn:active { transform: scale(0.98); }
-        .btn-ai.active { background: #002200; border-color: var(--highlight-green); color: var(--highlight-green); }
+        .btn-export { border-color: var(--highlight-blue); color: var(--highlight-blue); }
     </style>
 </head>
 <body>
@@ -78,22 +79,20 @@
 <header>
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
-        <span id="aiStatus" class="status-badge">🧠 엔진 예열 중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V4.7 🚀</div>
+        <span id="aiStatus" class="status-badge">🧠 엔진 준비 중...</span>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V4.8 🐾</div>
     </div>
 </header>
 
 <main>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <input type="file" id="videoUpload" accept="video/*" style="font-size: 0.85rem;">
-    </div>
+    <input type="file" id="videoUpload" accept="video/*" style="font-size: 0.85rem;">
 
     <div class="player-container" id="playerContainer">
         <canvas id="motionCanvas"></canvas>
         <div class="crosshair" id="crosshair"></div>
     </div>
 
-    <p style="font-size: 0.8rem; color: #888; text-align: center;">💡 영상 재생 중 라이더를 <b>중앙으로 한 번만 쓱 드래그</b>해서 AI에게 알려주세요.</p>
+    <div class="tags-container" id="tagsContainer"></div>
 
     <div class="control-panel">
         <div class="seek-container">
@@ -116,8 +115,8 @@
         </div>
         
         <div class="btn-group">
-            <button id="btnAiTrack" class="action-btn btn-ai active" onclick="toggleAITracking()">🤖 터보 트래킹 ON</button>
             <button class="action-btn" onclick="resetCenter()">🎯 중앙 초기화</button>
+            <button class="action-btn btn-export" onclick="exportData()">💾 편집 데이터 추출</button>
         </div>
     </div>
 </main>
@@ -137,50 +136,66 @@
     const playBtn = document.getElementById('playBtn');
     const playerContainer = document.getElementById('playerContainer');
     const aiStatus = document.getElementById('aiStatus');
-    const btnAiTrack = document.getElementById('btnAiTrack');
-    const crosshair = document.getElementById('crosshair');
 
     let zoom = 2.5; let panSensitivity = 2.5; 
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
-
     let isDragging = false;
     let lastMouseX = 0; let lastMouseY = 0;
 
+    // 데이터 저장용 변수
+    let trackData = []; 
+    let savedTags = [];
     let model = null;
-    let isAITracking = true;
-    let isDetecting = false; 
-    let targetLostFrames = 0;
+    let isDetecting = false;
 
-    // 1. 모델 로드
-    cocoSsd.load().then(loadedModel => {
-        model = loadedModel;
-        updateStatus("🟢 터보 준비 완료", "var(--highlight-green)");
+    const MOTION_TAGS = ['스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시'];
+
+    // 태그 버튼 부활
+    const tagsContainer = document.getElementById('tagsContainer');
+    MOTION_TAGS.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.className = 'tag-btn';
+        btn.innerText = tag;
+        btn.onclick = () => {
+            savedTags.push({ time: video.currentTime, tag: tag });
+            btn.style.borderColor = "var(--highlight-green)";
+            setTimeout(() => btn.style.borderColor = "#444", 500);
+        };
+        tagsContainer.appendChild(btn);
     });
 
-    function updateStatus(text, color, isLost = false) {
-        aiStatus.innerText = text;
-        aiStatus.style.background = color;
-        aiStatus.style.color = "#000";
-        if (isLost) crosshair.classList.add('lost');
-        else crosshair.classList.remove('lost');
-    }
+    cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비됨"; });
 
-    videoUpload.addEventListener('change', function(e) {
+    videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
             video.src = URL.createObjectURL(file);
             video.onloadedmetadata = () => {
                 seekBar.max = video.duration;
-                centerX = video.videoWidth / 2;
-                centerY = video.videoHeight / 2;
+                centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
                 render();
             };
         }
     });
 
-    // 2. 수동 개입
+    // 1. 드래그 방향 수정 (+를 -로, -를 +로 교체하여 물체를 직접 잡는 느낌으로)
+    function startDrag(e) { isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; }
+    function drag(e) {
+        if (!isDragging) return;
+        const dx = e.clientX - lastMouseX; const dy = e.clientY - lastMouseY;
+        const scale = ((video.videoWidth / zoom) / playerContainer.offsetWidth) * panSensitivity;
+        
+        // 🚀 수정됨: 사용자의 손가락 방향대로 화면이 따라오도록 연산 반전
+        centerX += dx * scale; 
+        centerY += dy * scale;
+        
+        targetX = centerX; targetY = centerY;
+        lastMouseX = e.clientX; lastMouseY = e.clientY;
+    }
+    function endDrag() { isDragging = false; }
+
     playerContainer.addEventListener('mousedown', startDrag);
     window.addEventListener('mousemove', drag);
     window.addEventListener('mouseup', endDrag);
@@ -188,94 +203,58 @@
     window.addEventListener('touchmove', (e) => { if(isDragging) e.preventDefault(); drag(e.touches[0]); }, {passive: false});
     window.addEventListener('touchend', endDrag);
 
-    function startDrag(e) {
-        isDragging = true;
-        lastMouseX = e.clientX; lastMouseY = e.clientY;
-        playerContainer.style.borderColor = "var(--highlight-blue)"; 
-        updateStatus("🖐 수동 가이드 중", "var(--highlight-blue)");
-    }
-
-    function drag(e) {
-        if (!isDragging) return;
-        const dx = e.clientX - lastMouseX; const dy = e.clientY - lastMouseY;
-        const scale = ((video.videoWidth / zoom) / playerContainer.offsetWidth) * panSensitivity;
-        
-        centerX -= dx * scale; centerY -= dy * scale;
-        targetX = centerX; targetY = centerY; // AI에게 새 기준점 제시
-        lastMouseX = e.clientX; lastMouseY = e.clientY;
-    }
-
-    function endDrag() { 
-        isDragging = false; 
-        playerContainer.style.borderColor = "var(--border)";
-    }
-
-    // 3. AI 객체 인식 함수 (비동기, 호출되는 즉시 최대로 일함)
+    // 2. AI 인식률 개선 (확대된 이미지를 분석)
     async function detectPerson() {
-        if (!model || video.paused || isDetecting || !isAITracking || isDragging) return;
-        
-        isDetecting = true; // 중복 실행 방지 잠금
+        if (!model || video.paused || isDetecting || isDragging) return;
+        isDetecting = true;
         try {
-            const predictions = await model.detect(video);
+            // 원본 비디오 대신 '현재 캔버스(확대된 상태)'를 AI에게 넘겨줍니다!
+            const predictions = await model.detect(canvas); 
             const people = predictions.filter(p => p.class === 'person');
             
             if (people.length > 0) {
-                let bestPerson = null;
-                let minDistance = Infinity;
+                // 캔버스 내 중심점 찾기
+                const best = people[0]; // 가장 큰 사람
+                const bx = best.bbox[0] + best.bbox[2]/2;
+                const by = best.bbox[1] + best.bbox[3]/2;
 
-                // 내가 잡아준 중앙(centerX)과 가장 가까운 사람 찾기 (스나이퍼)
-                people.forEach(p => {
-                    const px = p.bbox[0] + (p.bbox[2] / 2);
-                    const py = p.bbox[1] + (p.bbox[3] / 2);
-                    const dist = Math.hypot(px - centerX, py - centerY);
-                    if (dist < minDistance) { minDistance = dist; bestPerson = p; }
-                });
-
-                if (bestPerson) {
-                    targetX = bestPerson.bbox[0] + (bestPerson.bbox[2] / 2);
-                    targetY = bestPerson.bbox[1] + (bestPerson.bbox[3] / 2);
-                    targetLostFrames = 0;
-                    updateStatus("🎯 터보 추적 중", "var(--highlight-green)");
-                }
-            } else {
-                targetLostFrames++;
-                if (targetLostFrames > 3) { // 프레임 단위가 빨라졌으므로 3프레임만 놓쳐도 대기
-                    updateStatus("⚠️ 타겟 대기", "var(--highlight-red)", true);
-                    targetX = centerX; targetY = centerY;
-                }
+                // 캔버스 상의 좌표를 원본 영상 좌표로 역산하여 targetX 업데이트
+                const canvasW = canvas.width; const canvasH = canvas.height;
+                const viewW = canvasW / zoom; const viewH = canvasH / zoom;
+                
+                // 캔버스 중앙이 원본의 centerX이므로, 캔버스 내 상대 좌표를 더해줌
+                targetX = (centerX - viewW/2) + (bx / canvasW) * viewW;
+                targetY = (centerY - viewH/2) + (by / canvasH) * viewH;
+                
+                aiStatus.innerText = "🎯 추적 중";
             }
-        } finally {
-            isDetecting = false; // 분석 끝나면 잠금 해제
-        }
+        } finally { isDetecting = false; }
     }
 
-    // --- 버튼 컨트롤 ---
-    function resetCenter() { targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; centerX = targetX; centerY = targetY; }
-    function togglePlay() { video.paused ? (video.play(), playBtn.innerText = "Ⅱ") : (video.pause(), playBtn.innerText = "▶"); }
-    function toggleAITracking() {
-        isAITracking = !isAITracking;
-        if (isAITracking) { btnAiTrack.classList.add('active'); btnAiTrack.innerText = "🤖 터보 트래킹 ON"; } 
-        else { btnAiTrack.classList.remove('active'); btnAiTrack.innerText = "🤖 트래킹 OFF"; updateStatus("⚪ 대기 중", "#ddd"); }
+    // 3. 데이터 추출 (Export)
+    function exportData() {
+        const data = {
+            projectName: "CrystalTory_Motion_V4.8",
+            timestamp: new Date().toISOString(),
+            tags: savedTags,
+            paths: trackData
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `motion_edit_${Math.floor(Date.now()/1000)}.json`;
+        a.click();
     }
-    seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
-    zoomRange.addEventListener('input', (e) => { zoom = e.target.value; zoomVal.innerText = zoom + 'x'; });
-    panRange.addEventListener('input', (e) => { panSensitivity = e.target.value; panVal.innerText = panSensitivity + 'x'; });
 
-    // 4. 메인 렌더링 & AI 터보 호출 융합
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
-
-        // 🚀 타이머(setInterval) 삭제! 화면이 그려지는 1/60초마다 AI에게 계속 일해달라고 조릅니다.
-        if (isAITracking && !video.paused && !isDragging) {
-            detectPerson(); 
-        }
+        if (!video.paused && !isDragging) detectPerson();
 
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-
-        // 카메라 이동 (반응 속도를 0.25로 대폭 올려 더 빠릿하게 쫓아감)
         if (!isDragging) {
-            centerX += (targetX - centerX) * 0.25;
-            centerY += (targetY - centerY) * 0.25;
+            centerX += (targetX - centerX) * 0.15;
+            centerY += (targetY - centerY) * 0.15;
         }
 
         const viewWidth = canvas.width / zoom; const viewHeight = canvas.height / zoom;
@@ -285,17 +264,26 @@
         const sx = centerX - viewWidth / 2; const sy = centerY - viewHeight / 2;
         ctx.drawImage(video, sx, sy, viewWidth, viewHeight, 0, 0, canvas.width, canvas.height);
         
-        if (!video.paused) { seekBar.value = video.currentTime; }
+        // 궤적 자동 기록 (0.1초마다)
+        if (!video.paused && Math.floor(video.currentTime * 10) % 2 === 0) {
+            trackData.push({t: video.currentTime.toFixed(2), x: centerX.toFixed(1), y: centerY.toFixed(1)});
+        }
+
+        if (!video.paused) seekBar.value = video.currentTime;
         document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
         
+        // 영상 종료 시 자동 저장 안내 (간단히 콘솔에 표시하거나 버튼 강조)
+        if (video.ended) { playBtn.innerText = "▶"; }
+
         requestAnimationFrame(render);
     }
 
-    function formatTime(seconds) {
-        if (isNaN(seconds)) return "00:00";
-        const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60);
-        return m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0');
-    }
+    function togglePlay() { video.paused ? (video.play(), playBtn.innerText = "Ⅱ") : (video.pause(), playBtn.innerText = "▶"); }
+    function resetCenter() { targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; }
+    function formatTime(s) { const m = Math.floor(s / 60); return m.toString().padStart(2, '0') + ":" + Math.floor(s % 60).toString().padStart(2, '0'); }
+    seekBar.addEventListener('input', () => video.currentTime = seekBar.value);
+    zoomRange.addEventListener('input', (e) => { zoom = e.target.value; zoomVal.innerText = zoom + 'x'; });
+    panRange.addEventListener('input', (e) => { panSensitivity = e.target.value; panVal.innerText = panSensitivity + 'x'; });
 </script>
 </body>
 </html>
