@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.4 (Wait & Catch)</title>
+    <title>CrystalTory_Motion V5.5 (Smart Analytics)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -74,11 +74,15 @@
             display: flex; align-items: center; gap: 10px; background: #111; 
             padding: 10px; border-radius: 8px; border: 1px solid #222;
         }
-        .segment-time { font-size: 0.75rem; color: var(--highlight-green); min-width: 90px; text-align: center; }
+        .segment-time { font-size: 0.75rem; color: var(--highlight-green); min-width: 90px; text-align: center; font-weight: bold; }
         .segment-label-select { 
             background: #222; color: white; border: 1px solid #444; padding: 6px; 
-            border-radius: 4px; font-size: 0.8rem; flex: 1; 
+            border-radius: 4px; font-size: 0.8rem; flex: 1; font-weight: bold;
         }
+        /* 드롭다운에서 특정 태그 강조 */
+        .segment-label-select.jump { color: var(--highlight-red); border-color: var(--highlight-red); }
+        .segment-label-select.slalom { color: var(--highlight-blue); border-color: var(--highlight-blue); }
+        .segment-label-select.wait { color: #888; border-color: #555; }
 
         .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px;}
         .btn-group { display: flex; gap: 10px; }
@@ -92,7 +96,7 @@
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="aiStatus" class="status-badge">🧠 대기중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.4 🐾</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.5 🐾</div>
     </div>
 </header>
 
@@ -139,11 +143,11 @@
 
     <div class="timeline-editor">
         <div class="timeline-header">
-            <span>🎥 구간 편집 타임라인</span>
-            <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-blue); font-size:0.8rem; cursor:pointer; font-weight:bold;">⚡ 자동 구간 생성</button>
+            <span>🎥 스마트 분석 타임라인</span>
+            <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-green); font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 스마트 구간 분석</button>
         </div>
         <div class="segment-list" id="segmentList">
-            <p style="text-align:center; color:#555; font-size:0.8rem; padding: 20px 0;">작업을 불러오거나 자동 구간 생성을 눌러주세요.</p>
+            <p style="text-align:center; color:#555; font-size:0.8rem; padding: 20px 0;">영상을 재생하여 데이터를 모은 뒤 [스마트 구간 분석]을 눌러주세요.</p>
         </div>
     </div>
 
@@ -191,7 +195,8 @@
     let isDetecting = false;
     let targetLostFrames = 0; 
 
-    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시'];
+    // V5.5 태그에 대기/이탈 추가
+    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈'];
 
     cocoSsd.load().then(m => { 
         model = m; 
@@ -207,6 +212,7 @@
                 seekBar.max = video.duration;
                 centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
+                trackData = []; // 새 영상 로드 시 기록 초기화
                 render();
             };
         }
@@ -268,12 +274,11 @@
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
     playerContainer.addEventListener('touchstart', startDrag, {passive: false}); window.addEventListener('touchmove', (e) => { if(isDragging) { e.preventDefault(); drag(e.touches[0]); } }, {passive: false}); window.addEventListener('touchend', endDrag);
 
-    // V5.4 핵심: 원본 이탈 시 '프로 카메라맨 대응 로직 (Wait & Catch)'
+    // AI 엔진
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
         isDetecting = true;
         try {
-            // [1차 탐색] 확대된 캔버스
             const predictions = await model.detect(canvas); 
             const person = predictions.find(p => p.class === 'person');
             
@@ -292,49 +297,95 @@
                     let calculatedZoom = currentZoom * (desiredHeight / personHeightOnCanvas);
                     targetZoom = Math.max(1.0, Math.min(calculatedZoom, 8.0));
                 }
-                
-                aiStatus.style.color = "var(--highlight-green)";
-                aiStatus.innerText = "🎯 줌 정밀 추적";
+                aiStatus.style.color = "var(--highlight-green)"; aiStatus.innerText = "🎯 줌 정밀 추적";
             } else {
                 targetLostFrames++;
-                
-                // [2차 탐색] 시야 밖으로 나감 -> 원본 스캔
                 if (targetLostFrames >= 2) {
                     const fallbackPreds = await model.detect(video);
                     const fbPerson = fallbackPreds.find(p => p.class === 'person');
-                    
                     if (fbPerson) {
                         targetX = fbPerson.bbox[0] + fbPerson.bbox[2]/2;
                         targetY = fbPerson.bbox[1] + fbPerson.bbox[3]/2;
                         targetLostFrames = 0;
-                        aiStatus.style.color = "var(--highlight-blue)";
-                        aiStatus.innerText = "⚡ 타겟 복구!";
+                        aiStatus.style.color = "var(--highlight-blue)"; aiStatus.innerText = "⚡ 타겟 복구!";
                     } else {
-                        // V5.4 하이라이트: 원본 영상에서도 완전히 사라졌을 때
-                        aiStatus.style.color = "var(--highlight-red)";
-                        aiStatus.innerText = "⚠️ 원본 이탈 (대기 중)";
-                        
-                        // 1. targetX, targetY는 엉뚱한 곳으로 튀지 않게 현재 위치(마지막으로 본 곳)에 그대로 고정!
-                        targetX = centerX;
-                        targetY = centerY;
-
-                        // 2. 오토줌 모드라면, 시야 확보를 위해 줌을 스르륵 1배율(원본)로 풀어버림
-                        if (isAutoZoom) {
-                            targetZoom = 1.0; 
-                        }
+                        aiStatus.style.color = "var(--highlight-red)"; aiStatus.innerText = "⚠️ 원본 이탈 (대기 중)";
+                        targetX = centerX; targetY = centerY;
+                        if (isAutoZoom) targetZoom = 1.0; 
                     }
                 }
             }
         } finally { isDetecting = false; }
     }
 
+    // V5.5 핵심: 시계열 모션 분석 엔진 (스마트 구간 생성)
     function autoGenerateSegments() {
-        if (isNaN(video.duration) || video.duration === 0) { alert("영상을 먼저 불러와주세요."); return; }
-        segments = [];
-        for (let i = 0; i < video.duration; i += 5) {
-            segments.push({ id: Date.now() + i, start: i, end: Math.min(i + 5, video.duration), label: '기본 트래킹' });
+        if (trackData.length < 50) {
+            alert("아직 분석할 데이터가 부족합니다! ⚠️\n영상을 재생하여 AI가 라이더의 궤적(X, Y, 줌)을 충분히 기록할 수 있게 해주세요.");
+            return;
         }
+
+        let tempSegments = [];
+        let windowSize = 3; // 3초 단위로 묶어서 패턴을 검사합니다.
+        let lastTime = parseFloat(trackData[trackData.length-1].t);
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+
+        for (let startT = 0; startT < lastTime; startT += windowSize) {
+            let endT = startT + windowSize;
+            // 3초어치 데이터를 잘라냄
+            let chunk = trackData.filter(d => parseFloat(d.t) >= startT && parseFloat(d.t) < endT);
+            
+            if (chunk.length === 0) continue;
+
+            let xs = chunk.map(d => parseFloat(d.x));
+            let ys = chunk.map(d => parseFloat(d.y));
+            let zs = chunk.map(d => parseFloat(d.z));
+
+            // X, Y 이동 폭(최대-최소) 계산
+            let diffX = Math.max(...xs) - Math.min(...xs);
+            let diffY = Math.max(...ys) - Math.min(...ys);
+            let avgZ = zs.reduce((a, b) => a + b, 0) / zs.length;
+
+            let label = '기본 트래킹';
+
+            // 수학적 패턴 룰 (Heuristic Rule)
+            if (avgZ <= 1.2) {
+                label = '대기/이탈';   // 줌이 1.2배 이하면 화면 밖으로 나갔거나 멀리서 대기 중
+            } else if (diffY > h * 0.15) {
+                label = '점프';        // 3초 안에 Y축(위아래)으로 원본 높이의 15% 이상 크게 뛰었을 때
+            } else if (diffX > w * 0.20) {
+                label = '슬라럼';      // 3초 안에 X축(좌우)으로 원본 너비의 20% 이상 크게 이동했을 때
+            }
+
+            tempSegments.push({ start: startT, end: endT, label: label });
+        }
+
+        // 연속된 같은 라벨의 구간을 하나로 합치기 (Merge)
+        segments = [];
+        if (tempSegments.length > 0) {
+            let current = tempSegments[0];
+            for (let i = 1; i < tempSegments.length; i++) {
+                if (tempSegments[i].label === current.label) {
+                    current.end = tempSegments[i].end; // 시간 연장
+                } else {
+                    segments.push(current);
+                    current = tempSegments[i];
+                }
+            }
+            segments.push(current);
+
+            // 최종 포맷팅
+            segments = segments.map((m, idx) => ({
+                id: Date.now() + idx,
+                start: m.start,
+                end: m.end,
+                label: m.label
+            }));
+        }
+
         updateSegmentListUI();
+        alert("✨ 스마트 분석 완료!\n라이더의 좌표와 줌 배율을 수학적으로 분석하여 동작을 분리했습니다.");
     }
 
     function updateSegmentListUI() {
@@ -345,9 +396,16 @@
         segments.forEach(seg => {
             const item = document.createElement('div');
             item.className = 'segment-item';
+            
+            // 태그별로 드롭다운 색상을 다르게 적용하기 위한 클래스
+            let colorClass = '';
+            if(seg.label === '점프') colorClass = 'jump';
+            else if(seg.label === '슬라럼') colorClass = 'slalom';
+            else if(seg.label === '대기/이탈') colorClass = 'wait';
+
             item.innerHTML = `
                 <span class="segment-time">${formatTime(seg.start)}<br>~ ${formatTime(seg.end)}</span>
-                <select class="segment-label-select" onchange="updateSegmentLabel(${seg.id}, this.value)">
+                <select class="segment-label-select ${colorClass}" onchange="updateSegmentLabel(${seg.id}, this)">
                     ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
                 </select>
                 <button onclick="video.currentTime=${seg.start}" style="background:none; border:1px solid #444; color:#aaa; font-size:0.75rem; padding:6px 10px; border-radius:4px; cursor:pointer;">이동</button>
@@ -357,7 +415,18 @@
         });
     }
 
-    function updateSegmentLabel(id, newLabel) { const seg = segments.find(s => s.id === id); if (seg) seg.label = newLabel; }
+    function updateSegmentLabel(id, selectElement) { 
+        const seg = segments.find(s => s.id === id); 
+        if (seg) {
+            seg.label = selectElement.value; 
+            // 클래스 업데이트 (색상 변경)
+            selectElement.className = 'segment-label-select';
+            if(seg.label === '점프') selectElement.classList.add('jump');
+            else if(seg.label === '슬라럼') selectElement.classList.add('slalom');
+            else if(seg.label === '대기/이탈') selectElement.classList.add('wait');
+        }
+    }
+    
     function deleteSegment(id) { segments = segments.filter(s => s.id !== id); updateSegmentListUI(); }
 
     function render() {
@@ -383,10 +452,16 @@
 
         ctx.drawImage(video, centerX - viewW/2, centerY - viewH/2, viewW, viewH, 0, 0, canvas.width, canvas.height);
         
+        // 0.1초 단위로 [시간, X, Y, Z] 데이터 차곡차곡 기록
         if (!video.paused) {
             seekBar.value = video.currentTime;
             if (Math.floor(video.currentTime * 10) % 2 === 0) {
-                trackData.push({t: video.currentTime.toFixed(2), x: centerX.toFixed(1), y: centerY.toFixed(1), z: currentZoom.toFixed(1)});
+                trackData.push({
+                    t: video.currentTime.toFixed(2), 
+                    x: centerX.toFixed(1), 
+                    y: centerY.toFixed(1), 
+                    z: currentZoom.toFixed(1)
+                });
             }
         }
         timeDisplay.innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
@@ -395,7 +470,7 @@
 
     function exportData() {
         if (segments.length === 0 && trackData.length === 0) { alert("저장할 데이터가 없습니다."); return; }
-        const data = { projectName: "CrystalTory_V5.4", segments, trackData };
+        const data = { projectName: "CrystalTory_V5.5", segments, trackData };
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
