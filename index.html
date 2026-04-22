@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.7 (Highlight Edition)</title>
+    <title>CrystalTory_Motion V5.8 (Inertia Tracking)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -81,7 +81,6 @@
         .segment-label-select.jump { color: var(--highlight-red); border-color: var(--highlight-red); }
         .segment-label-select.slalom { color: var(--highlight-blue); border-color: var(--highlight-blue); }
 
-        /* V5.7 추가된 버튼 스타일 */
         .action-icon-btn {
             background: #333; border: 1px solid #555; color: white; padding: 6px 10px; 
             border-radius: 4px; cursor: pointer; font-size: 0.75rem; transition: 0.2s; font-weight: bold;
@@ -107,7 +106,7 @@
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="aiStatus" class="status-badge">🧠 대기중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.7 🐾</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.8 🐾</div>
     </div>
 </header>
 
@@ -186,13 +185,15 @@
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
     
+    // V5.8 관성(Inertia) 추적 변수 추가
+    let velocityX = 0; let velocityY = 0;
+    
     let isDragging = false;
     let lastMouseX = 0; let lastMouseY = 0;
 
     let trackData = []; let segments = [];
     let model = null; let isDetecting = false; let targetLostFrames = 0; 
     
-    // V5.7 전용 녹화 상태 변수
     let activeSegmentListener = null;
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -258,6 +259,7 @@
         lastMouseX = e.clientX || (e.touches && e.touches[0].clientX); 
         lastMouseY = e.clientY || (e.touches && e.touches[0].clientY); 
         playerContainer.style.borderColor = "var(--highlight-blue)";
+        velocityX = 0; velocityY = 0; // 수동 조작 시 관성 초기화
     }
     function drag(e) {
         if (!isDragging) return;
@@ -274,12 +276,17 @@
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
     playerContainer.addEventListener('touchstart', startDrag, {passive: false}); window.addEventListener('touchmove', (e) => { if(isDragging) { e.preventDefault(); drag(e.touches[0]); } }, {passive: false}); window.addEventListener('touchend', endDrag);
 
+    // V5.8 스마트 관성 카메라 엔진
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
         isDetecting = true;
         try {
             const predictions = await model.detect(canvas); 
-            const person = predictions.find(p => p.class === 'person');
+            // 웨이크보드 특성 반영: 화면에 감지된 사람 중 가장 덩치가 큰(가까운) 사람을 메인 타겟으로 삼음
+            const persons = predictions.filter(p => p.class === 'person');
+            let person = persons.length > 0 ? persons.reduce((prev, current) => 
+                (prev.bbox[2] * prev.bbox[3] > current.bbox[2] * current.bbox[3]) ? prev : current
+            ) : null;
             
             if (person) {
                 targetLostFrames = 0; 
@@ -287,8 +294,16 @@
                 const by = person.bbox[1] + person.bbox[3]/2;
                 const viewW = canvas.width / currentZoom; 
                 const viewH = canvas.height / currentZoom;
-                targetX = (centerX - viewW/2) + (bx / canvas.width) * viewW;
-                targetY = (centerY - viewH/2) + (by / canvas.height) * viewH;
+                
+                let newTargetX = (centerX - viewW/2) + (bx / canvas.width) * viewW;
+                let newTargetY = (centerY - viewH/2) + (by / canvas.height) * viewH;
+                
+                // 타겟의 이동 속도(관성) 계산
+                velocityX = (newTargetX - targetX) * 0.4;
+                velocityY = (newTargetY - targetY) * 0.4;
+
+                targetX = newTargetX;
+                targetY = newTargetY;
                 
                 if (isAutoZoom) {
                     const personHeightOnCanvas = person.bbox[3]; 
@@ -296,20 +311,20 @@
                     let calculatedZoom = currentZoom * (desiredHeight / personHeightOnCanvas);
                     targetZoom = Math.max(1.0, Math.min(calculatedZoom, 8.0));
                 }
-                if(!isRecording) { aiStatus.style.color = "var(--highlight-green)"; aiStatus.innerText = "🎯 추적 중"; }
+                if(!isRecording) { aiStatus.style.color = "var(--highlight-green)"; aiStatus.innerText = "🎯 락온 추적 중"; }
             } else {
                 targetLostFrames++;
-                if (targetLostFrames >= 2) {
-                    const fallbackPreds = await model.detect(video);
-                    const fbPerson = fallbackPreds.find(p => p.class === 'person');
-                    if (fbPerson) {
-                        targetX = fbPerson.bbox[0] + fbPerson.bbox[2]/2;
-                        targetY = fbPerson.bbox[1] + fbPerson.bbox[3]/2;
-                        targetLostFrames = 0;
-                    } else {
-                        targetX = centerX; targetY = centerY;
-                        if (isAutoZoom) targetZoom = 1.0; 
-                    }
+                // 타겟을 놓쳤을 때, 약 1.5초(약 45프레임) 동안은 기존 이동 방향으로 스무스하게 카메라를 흘려보냄
+                if (targetLostFrames < 45) {
+                    targetX += velocityX;
+                    targetY += velocityY;
+                    velocityX *= 0.95; // 서서히 감속 (마찰력 효과)
+                    velocityY *= 0.95;
+                    if(!isRecording) { aiStatus.style.color = "var(--highlight-blue)"; aiStatus.innerText = "🌊 관성 카메라 유지..."; }
+                } else {
+                    // 완전히 놓친 경우 강제로 중앙으로 튕기지 않고, 그 자리에 부드럽게 멈춰서 대기
+                    if(!isRecording) { aiStatus.style.color = "var(--highlight-red)"; aiStatus.innerText = "⚠️ 타겟 탐색 중..."; }
+                    if (isAutoZoom) targetZoom -= (targetZoom - 1.0) * 0.05; // 줌만 부드럽게 풀어줌
                 }
             }
         } finally { isDetecting = false; }
@@ -346,7 +361,6 @@
         updateSegmentListUI();
     }
 
-    // V5.7 UI 업데이트 (재생/추출/시간조절 추가)
     function updateSegmentListUI() {
         segmentListUI.innerHTML = '';
         segments.forEach(seg => {
@@ -388,13 +402,10 @@
     }
     function deleteSegment(id) { segments = segments.filter(s => s.id !== id); updateSegmentListUI(); }
 
-    // V5.7 시간 미세조정 로직
     function adjustSegmentTime(id, field, delta) {
         const seg = segments.find(s => s.id === id);
         if (!seg) return;
         seg[field] = Math.max(0, Math.min(video.duration || 9999, seg[field] + delta));
-        
-        // 시작 시간이 종료 시간을 넘지 않도록 방어 로직
         if (seg.start >= seg.end) {
             if (field === 'start') seg.end = seg.start + 0.5;
             else seg.start = Math.max(0, seg.end - 0.5);
@@ -402,7 +413,6 @@
         updateSegmentListUI();
     }
 
-    // V5.7 구간 재생 로직
     function playSegment(id) {
         if(isRecording) return alert("현재 영상을 렌더링 중입니다. 잠시만 기다려주세요!");
         const seg = segments.find(s => s.id === id);
@@ -424,7 +434,6 @@
         video.addEventListener('timeupdate', activeSegmentListener);
     }
 
-    // V5.7 캔버스 화면 렌더링(녹화) 추출 로직
     async function extractHighlight(id, btnElement) {
         if(isRecording) return alert("이미 다른 영상을 렌더링 중입니다!");
         const seg = segments.find(s => s.id === id);
@@ -439,7 +448,6 @@
         video.currentTime = seg.start;
         await new Promise(r => video.addEventListener('seeked', r, {once: true}));
         
-        // 캔버스의 화면을 30FPS로 스트리밍 캡처
         const stream = canvas.captureStream(30); 
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
         recordedChunks = [];
@@ -483,15 +491,20 @@
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
         if (!video.paused && !isDragging) detectPerson();
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        
         if (!isDragging) {
-            centerX += (targetX - centerX) * 0.15; centerY += (targetY - centerY) * 0.15;
+            centerX += (targetX - centerX) * 0.15; 
+            centerY += (targetY - centerY) * 0.15;
             currentZoom += (targetZoom - currentZoom) * 0.05; 
             zoomRange.value = currentZoom; zoomVal.innerText = currentZoom.toFixed(1) + 'x';
         }
+        
         const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
         centerX = Math.max(vW / 2, Math.min(canvas.width - vW / 2, centerX));
         centerY = Math.max(vH / 2, Math.min(canvas.height - vH / 2, centerY));
+        
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
+        
         if (!video.paused) {
             seekBar.value = video.currentTime;
             if (Math.floor(video.currentTime * 10) % 2 === 0) trackData.push({t: video.currentTime.toFixed(2), x: centerX.toFixed(1), y: centerY.toFixed(1), z: currentZoom.toFixed(1)});
@@ -501,7 +514,7 @@
     }
 
     function exportData() {
-        const data = { projectName: "CrystalTory_V5.7", segments, trackData };
+        const data = { projectName: "CrystalTory_V5.8", segments, trackData };
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `motion_edit_${Date.now()}.json`; a.click();
     }
