@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.2 (Pro Editor)</title>
+    <title>CrystalTory_Motion V5.4 (Wait & Catch)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -25,15 +25,14 @@
         }
         .logo { font-size: 1.2rem; font-weight: 800; }
         .logo span { color: var(--point-silver); font-weight: 300; }
-        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #333; color: #aaa; transition: 0.3s; }
+        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #333; color: #aaa; transition: 0.3s; font-weight: bold; }
 
         main { display: flex; flex-direction: column; padding: 15px; gap: 15px; flex: 1; }
 
-        /* 상단 파일 업로드 버튼 그룹 */
         .file-ops { display: flex; gap: 10px; }
         .file-btn { 
             flex: 1; background: #222; border: 1px solid #444; color: #ddd; 
-            padding: 10px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer;
+            padding: 10px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; transition: 0.2s;
         }
         .file-btn:hover { background: #333; }
         .hidden-input { display: none; }
@@ -41,7 +40,7 @@
         .player-container {
             position: relative; background: #000; border-radius: 12px;
             overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border);
-            cursor: grab; width: 100%; transition: border 0.2s;
+            cursor: grab; width: 100%; transition: border-color 0.2s;
         }
         .player-container:active { cursor: grabbing; }
         #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
@@ -92,19 +91,19 @@
 <header>
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
-        <span id="aiStatus" class="status-badge">🧠 준비중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.2 🐾</div>
+        <span id="aiStatus" class="status-badge">🧠 대기중...</span>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.4 🐾</div>
     </div>
 </header>
 
 <main>
     <div class="file-ops">
         <label class="file-btn">
-            🎬 1. 영상 불러오기 (MP4)
+            🎬 1. 영상 열기 (MP4)
             <input type="file" id="videoUpload" accept="video/*" class="hidden-input">
         </label>
         <label class="file-btn" style="border-color: var(--highlight-blue); color: var(--highlight-blue);">
-            📁 2. 작업 불러오기 (JSON)
+            📁 2. 작업 열기 (JSON)
             <input type="file" id="jsonUpload" accept=".json" class="hidden-input">
         </label>
     </div>
@@ -176,10 +175,9 @@
     const timeDisplay = document.getElementById('timeDisplay');
     const btnAutoZoom = document.getElementById('btnAutoZoom');
 
-    // 카메라 및 줌 상태 변수
-    let currentZoom = 2.5; // 실제 렌더링에 쓰이는 부드러운 줌
-    let targetZoom = 2.5;  // AI가 목표로 하는 줌
-    let isAutoZoom = false; // 오토줌 상태
+    let currentZoom = 2.5; 
+    let targetZoom = 2.5;  
+    let isAutoZoom = false; 
     let panSensitivity = 2.5; 
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
@@ -191,16 +189,16 @@
     let segments = [];
     let model = null;
     let isDetecting = false;
+    let targetLostFrames = 0; 
 
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시'];
 
-    // AI 엔진 로드
     cocoSsd.load().then(m => { 
         model = m; 
         aiStatus.innerText = "🟢 AI 준비 완료"; 
+        aiStatus.style.color = "var(--highlight-green)";
     });
 
-    // 1. 영상 불러오기
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -214,7 +212,6 @@
         }
     });
 
-    // 2. V5.2 핵심: JSON 작업 데이터 불러오기
     jsonUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -222,47 +219,33 @@
         reader.onload = function(event) {
             try {
                 const data = JSON.parse(event.target.result);
-                if (data.segments) {
-                    segments = data.segments;
-                    updateSegmentListUI();
-                }
-                if (data.trackData) {
-                    trackData = data.trackData;
-                }
-                alert("✅ 작업 데이터를 성공적으로 불러왔습니다!\n(영상을 아직 안 여셨다면 영상 파일도 열어주세요.)");
-            } catch(err) {
-                alert("❌ 파일을 읽는 중 오류가 발생했습니다.");
-            }
+                if (data.segments) { segments = data.segments; updateSegmentListUI(); }
+                if (data.trackData) { trackData = data.trackData; }
+                alert("✅ 작업 데이터를 성공적으로 불러왔습니다!");
+            } catch(err) { alert("❌ 파일을 읽는 중 오류가 발생했습니다."); }
         };
         reader.readAsText(file);
     });
 
-    function skip(amount) { 
-        if(!isNaN(video.duration)) video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); 
-    }
+    function skip(amount) { if(!isNaN(video.duration)) video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); }
 
     function toggleAutoZoom() {
         isAutoZoom = !isAutoZoom;
         if (isAutoZoom) {
-            btnAutoZoom.classList.add('active');
-            btnAutoZoom.innerText = "✨ 오토줌 ON";
+            btnAutoZoom.classList.add('active'); btnAutoZoom.innerText = "✨ 오토줌 ON";
         } else {
-            btnAutoZoom.classList.remove('active');
-            btnAutoZoom.innerText = "오토줌 OFF";
-            targetZoom = currentZoom; // 끄는 순간 현재 줌으로 고정
+            btnAutoZoom.classList.remove('active'); btnAutoZoom.innerText = "오토줌 OFF";
+            targetZoom = currentZoom; 
         }
     }
 
-    // 슬라이더 조작 시 (수동 개입하면 오토줌을 슬쩍 꺼줍니다)
     zoomRange.addEventListener('input', (e) => { 
-        if(isAutoZoom) toggleAutoZoom(); // 수동 조작 시 오토줌 자동 해제
-        targetZoom = parseFloat(e.target.value); 
-        currentZoom = targetZoom;
+        if(isAutoZoom) toggleAutoZoom(); 
+        targetZoom = parseFloat(e.target.value); currentZoom = targetZoom;
         zoomVal.innerText = targetZoom.toFixed(1) + 'x'; 
     });
     panRange.addEventListener('input', (e) => { panSensitivity = parseFloat(e.target.value); panVal.innerText = panSensitivity.toFixed(1) + 'x'; });
 
-    // 수동 드래그 (팬 이동)
     function startDrag(e) { 
         isDragging = true; 
         lastMouseX = e.clientX || (e.touches && e.touches[0].clientX); 
@@ -282,22 +265,20 @@
     }
     function endDrag() { isDragging = false; playerContainer.style.borderColor = "var(--border)"; }
     
-    playerContainer.addEventListener('mousedown', startDrag);
-    window.addEventListener('mousemove', drag);
-    window.addEventListener('mouseup', endDrag);
-    playerContainer.addEventListener('touchstart', startDrag, {passive: false});
-    window.addEventListener('touchmove', (e) => { if(isDragging) { e.preventDefault(); drag(e.touches[0]); } }, {passive: false});
-    window.addEventListener('touchend', endDrag);
+    playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
+    playerContainer.addEventListener('touchstart', startDrag, {passive: false}); window.addEventListener('touchmove', (e) => { if(isDragging) { e.preventDefault(); drag(e.touches[0]); } }, {passive: false}); window.addEventListener('touchend', endDrag);
 
-    // 3. V5.2 핵심: 다이나믹 오토 줌을 품은 AI 엔진
+    // V5.4 핵심: 원본 이탈 시 '프로 카메라맨 대응 로직 (Wait & Catch)'
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
         isDetecting = true;
         try {
+            // [1차 탐색] 확대된 캔버스
             const predictions = await model.detect(canvas); 
             const person = predictions.find(p => p.class === 'person');
+            
             if (person) {
-                // 1) 팬(Pan) 좌표 업데이트
+                targetLostFrames = 0; 
                 const bx = person.bbox[0] + person.bbox[2]/2;
                 const by = person.bbox[1] + person.bbox[3]/2;
                 const viewW = canvas.width / currentZoom; 
@@ -305,21 +286,44 @@
                 targetX = (centerX - viewW/2) + (bx / canvas.width) * viewW;
                 targetY = (centerY - viewH/2) + (by / canvas.height) * viewH;
                 
-                // 2) 오토 줌(Auto Zoom) 계산 로직
                 if (isAutoZoom) {
-                    const personHeightOnCanvas = person.bbox[3]; // 화면에 그려진 사람의 픽셀 높이
-                    const desiredHeight = canvas.height * 0.45;  // 사람이 화면 세로의 45% 정도 차지하길 원함
-                    
-                    // 사람이 작으면(멀어지면) 배율 증가, 크면(가까우면) 배율 감소
+                    const personHeightOnCanvas = person.bbox[3]; 
+                    const desiredHeight = canvas.height * 0.45;  
                     let calculatedZoom = currentZoom * (desiredHeight / personHeightOnCanvas);
-                    
-                    // 화면이 너무 널뛰지 않도록 한계선(Limit) 지정 (최소 1배 ~ 최대 8배)
                     targetZoom = Math.max(1.0, Math.min(calculatedZoom, 8.0));
                 }
                 
                 aiStatus.style.color = "var(--highlight-green)";
+                aiStatus.innerText = "🎯 줌 정밀 추적";
             } else {
-                aiStatus.style.color = "var(--point-silver)";
+                targetLostFrames++;
+                
+                // [2차 탐색] 시야 밖으로 나감 -> 원본 스캔
+                if (targetLostFrames >= 2) {
+                    const fallbackPreds = await model.detect(video);
+                    const fbPerson = fallbackPreds.find(p => p.class === 'person');
+                    
+                    if (fbPerson) {
+                        targetX = fbPerson.bbox[0] + fbPerson.bbox[2]/2;
+                        targetY = fbPerson.bbox[1] + fbPerson.bbox[3]/2;
+                        targetLostFrames = 0;
+                        aiStatus.style.color = "var(--highlight-blue)";
+                        aiStatus.innerText = "⚡ 타겟 복구!";
+                    } else {
+                        // V5.4 하이라이트: 원본 영상에서도 완전히 사라졌을 때
+                        aiStatus.style.color = "var(--highlight-red)";
+                        aiStatus.innerText = "⚠️ 원본 이탈 (대기 중)";
+                        
+                        // 1. targetX, targetY는 엉뚱한 곳으로 튀지 않게 현재 위치(마지막으로 본 곳)에 그대로 고정!
+                        targetX = centerX;
+                        targetY = centerY;
+
+                        // 2. 오토줌 모드라면, 시야 확보를 위해 줌을 스르륵 1배율(원본)로 풀어버림
+                        if (isAutoZoom) {
+                            targetZoom = 1.0; 
+                        }
+                    }
+                }
             }
         } finally { isDetecting = false; }
     }
@@ -327,9 +331,8 @@
     function autoGenerateSegments() {
         if (isNaN(video.duration) || video.duration === 0) { alert("영상을 먼저 불러와주세요."); return; }
         segments = [];
-        const interval = 5; 
-        for (let i = 0; i < video.duration; i += interval) {
-            segments.push({ id: Date.now() + i, start: i, end: Math.min(i + interval, video.duration), label: '기본 트래킹' });
+        for (let i = 0; i < video.duration; i += 5) {
+            segments.push({ id: Date.now() + i, start: i, end: Math.min(i + 5, video.duration), label: '기본 트래킹' });
         }
         updateSegmentListUI();
     }
@@ -364,15 +367,10 @@
         canvas.width = video.videoWidth; 
         canvas.height = video.videoHeight;
 
-        // 화면 이동 스무딩 (짐벌 효과)
         if (!isDragging) {
             centerX += (targetX - centerX) * 0.15;
             centerY += (targetY - centerY) * 0.15;
-            
-            // 줌 스무딩 (오토줌 시 부드럽게 렌즈가 들어왔다 나감)
             currentZoom += (targetZoom - currentZoom) * 0.05; 
-            
-            // UI 슬라이더도 같이 움직이게 업데이트
             zoomRange.value = currentZoom;
             zoomVal.innerText = currentZoom.toFixed(1) + 'x';
         }
@@ -397,7 +395,7 @@
 
     function exportData() {
         if (segments.length === 0 && trackData.length === 0) { alert("저장할 데이터가 없습니다."); return; }
-        const data = { projectName: "CrystalTory_V5.2", segments, trackData };
+        const data = { projectName: "CrystalTory_V5.4", segments, trackData };
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
