@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.12 (Hotfix Edition)</title>
+    <title>CrystalTory_Motion V5.13 (Focus & Stability)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -114,7 +114,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 대기중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.12 🐾</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.13 🐾</div>
     </div>
 </header>
 
@@ -217,18 +217,14 @@
     let wakeLock = null;
     let detectedBBox = null; 
     let activeSegmentListener = null;
-    let isRenderingLoopActive = false; // 중복 렌더링 방지 락
+    let isRenderingLoopActive = false; 
 
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈'];
 
     cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비 완료"; aiStatus.style.color = "var(--highlight-green)"; });
 
-    // 스페이스바 단축키 추가 (PC 환경 편의성)
     window.addEventListener('keydown', (e) => {
-        if(e.code === 'Space' && e.target.tagName !== 'INPUT') {
-            e.preventDefault();
-            togglePlay();
-        }
+        if(e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); togglePlay(); }
     });
 
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
@@ -271,16 +267,13 @@
         const file = e.target.files[0];
         if (file) {
             video.src = URL.createObjectURL(file);
-            video.load(); // 모바일 환경 렌더링 강제 시작
+            video.load(); 
             video.onloadeddata = () => {
                 seekBar.max = video.duration;
                 centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
                 trackData = []; segments = []; updateSegmentListUI(); 
-                if(!isRenderingLoopActive) {
-                    isRenderingLoopActive = true;
-                    render();
-                }
+                if(!isRenderingLoopActive) { isRenderingLoopActive = true; render(); }
             };
         }
     });
@@ -344,12 +337,14 @@
         } finally { isDetecting = false; }
     }
 
+    // [V5.13 조치] UI를 다시 그릴 때 관성(Inertia)이 폭주하지 않도록 초기화
     function updateSegmentListUI() {
+        velocityX = 0; velocityY = 0; 
+        
         const filter = tagFilter.value;
         segmentListUI.innerHTML = '';
         segments.forEach(seg => {
             if (filter !== '전체' && seg.label !== filter) return;
-
             const item = document.createElement('div');
             item.className = 'segment-item';
             let c = seg.label === '점프' ? 'jump' : seg.label === '슬라럼' ? 'slalom' : '';
@@ -359,7 +354,7 @@
                     <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this)">
                         ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
                     </select>
-                    <button class="action-icon-btn" onclick="splitSegment(${seg.id})" title="현재 시간에 맞춰 구간을 분할합니다">✂ 분할</button>
+                    <button class="action-icon-btn" onclick="splitSegment(${seg.id})">✂ 분할</button>
                     <button class="action-icon-btn" onclick="playSegment(${seg.id})">▶ 재생</button>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -523,7 +518,6 @@
         if (!video.paused) {
             seekBar.value = video.currentTime;
             
-            // [V5.12 핫픽스] 문법 에러가 발생했던 querySelector를 안전한 반복문으로 교체
             document.querySelectorAll('.seg-seekbar').forEach(bar => {
                 if (video.currentTime >= parseFloat(bar.min) && video.currentTime <= parseFloat(bar.max)) {
                     bar.value = video.currentTime;
