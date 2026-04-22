@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.11 (Stable Editor)</title>
+    <title>CrystalTory_Motion V5.12 (Hotfix Edition)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -114,7 +114,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 대기중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.11 🐾</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.12 🐾</div>
     </div>
 </header>
 
@@ -216,13 +216,20 @@
     let model = null; let isDetecting = false; let targetLostFrames = 0; 
     let wakeLock = null;
     let detectedBBox = null; 
-    
-    // [검수 조치 1] 이벤트 리스너 누수 방지용 글로벌 변수
     let activeSegmentListener = null;
+    let isRenderingLoopActive = false; // 중복 렌더링 방지 락
 
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈'];
 
     cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비 완료"; aiStatus.style.color = "var(--highlight-green)"; });
+
+    // 스페이스바 단축키 추가 (PC 환경 편의성)
+    window.addEventListener('keydown', (e) => {
+        if(e.code === 'Space' && e.target.tagName !== 'INPUT') {
+            e.preventDefault();
+            togglePlay();
+        }
+    });
 
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
     playerContainer.addEventListener('touchstart', startDrag, {passive: false}); 
@@ -264,11 +271,16 @@
         const file = e.target.files[0];
         if (file) {
             video.src = URL.createObjectURL(file);
-            video.onloadedmetadata = () => {
+            video.load(); // 모바일 환경 렌더링 강제 시작
+            video.onloadeddata = () => {
                 seekBar.max = video.duration;
                 centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
-                trackData = []; segments = []; updateSegmentListUI(); render();
+                trackData = []; segments = []; updateSegmentListUI(); 
+                if(!isRenderingLoopActive) {
+                    isRenderingLoopActive = true;
+                    render();
+                }
             };
         }
     });
@@ -402,12 +414,10 @@
         updateSegmentListUI();
     }
 
-    // [검수 조치 3] 소수점 연산 오류 방어
     function adjustTime(id, f, d) {
         const s = segments.find(i => i.id === id); if(!s) return;
         const oldVal = s[f];
         
-        // 부동소수점 오차(예: 1.0 + 0.5 = 1.500000000001) 해결을 위해 소수점 첫째 자리에서 반올림
         s[f] = Math.round(Math.max(0, Math.min(video.duration || 9999, s[f] + d)) * 10) / 10; 
         
         if (s.start >= s.end) {
@@ -428,7 +438,6 @@
     function playSegment(id) {
         const s = segments.find(i => i.id === id); if(!s) return;
         
-        // [검수 조치 1] 이전 리스너가 있다면 제거 (메모리 누수 및 오작동 방지)
         if (activeSegmentListener) {
             video.removeEventListener('timeupdate', activeSegmentListener);
             activeSegmentListener = null;
@@ -451,13 +460,13 @@
         video.addEventListener('timeupdate', activeSegmentListener);
     }
 
-    // 일괄 추출 로직 (V5.9와 동일)
     async function batchExtract() {
         const selectedSegs = segments.filter(s => s.selected);
         if(selectedSegs.length === 0) return;
         alert(`${selectedSegs.length}개의 구간을 순차적으로 추출합니다. 브라우저 팝업을 허용해주세요.`);
         for(let seg of selectedSegs) { await extractSegment(seg); }
     }
+    
     async function extractSegment(seg) {
         return new Promise(async (resolve) => {
             aiStatus.innerText = `🔴 추출 중: ${seg.label}`;
@@ -513,8 +522,13 @@
 
         if (!video.paused) {
             seekBar.value = video.currentTime;
-            const activeInput = document.querySelector(`.seg-seekbar[min<="${video.currentTime}"][max>="${video.currentTime}"]`);
-            if(activeInput) activeInput.value = video.currentTime;
+            
+            // [V5.12 핫픽스] 문법 에러가 발생했던 querySelector를 안전한 반복문으로 교체
+            document.querySelectorAll('.seg-seekbar').forEach(bar => {
+                if (video.currentTime >= parseFloat(bar.min) && video.currentTime <= parseFloat(bar.max)) {
+                    bar.value = video.currentTime;
+                }
+            });
 
             if (Math.floor(video.currentTime * 10) % 2 === 0) trackData.push({t: video.currentTime, x: centerX, y: centerY, z: currentZoom});
         }
