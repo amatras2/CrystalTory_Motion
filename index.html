@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.6 (Startup Guide)</title>
+    <title>CrystalTory_Motion V5.7 (Highlight Edition)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -71,10 +71,9 @@
         
         .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
         .segment-item { 
-            display: flex; align-items: center; gap: 10px; background: #111; 
-            padding: 10px; border-radius: 8px; border: 1px solid #222;
+            display: flex; flex-direction: column; gap: 10px; background: #111; 
+            padding: 12px; border-radius: 8px; border: 1px solid #222;
         }
-        .segment-time { font-size: 0.75rem; color: var(--highlight-green); min-width: 90px; text-align: center; font-weight: bold; }
         .segment-label-select { 
             background: #222; color: white; border: 1px solid #444; padding: 6px; 
             border-radius: 4px; font-size: 0.8rem; flex: 1; font-weight: bold;
@@ -82,10 +81,24 @@
         .segment-label-select.jump { color: var(--highlight-red); border-color: var(--highlight-red); }
         .segment-label-select.slalom { color: var(--highlight-blue); border-color: var(--highlight-blue); }
 
+        /* V5.7 추가된 버튼 스타일 */
+        .action-icon-btn {
+            background: #333; border: 1px solid #555; color: white; padding: 6px 10px; 
+            border-radius: 4px; cursor: pointer; font-size: 0.75rem; transition: 0.2s; font-weight: bold;
+        }
+        .action-icon-btn:hover { background: #444; }
+        .action-icon-btn.recording { background: var(--highlight-red); border-color: var(--highlight-red); animation: pulse 1.5s infinite; }
+        
+        .time-ctrl { display: flex; align-items: center; gap: 5px; background: #222; padding: 4px 8px; border-radius: 6px; border: 1px solid #333;}
+        .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-weight: bold; font-size: 1rem; padding: 0 4px; }
+        .time-btn:hover { color: white; }
+
         .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px;}
         .btn-group { display: flex; gap: 10px; }
         .action-btn { flex: 1; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; }
         .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -94,7 +107,7 @@
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="aiStatus" class="status-badge">🧠 대기중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.6 🐾</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.7 🐾</div>
     </div>
 </header>
 
@@ -166,24 +179,24 @@
     const playerContainer = document.getElementById('playerContainer');
     const aiStatus = document.getElementById('aiStatus');
     const segmentListUI = document.getElementById('segmentList');
-    const timeDisplay = document.getElementById('timeDisplay');
     const btnAutoZoom = document.getElementById('btnAutoZoom');
 
-    let currentZoom = 2.5; 
-    let targetZoom = 2.5;  
-    let isAutoZoom = false; 
-    let panSensitivity = 2.5; 
+    let currentZoom = 2.5; let targetZoom = 2.5;  
+    let isAutoZoom = false; let panSensitivity = 2.5; 
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
     
     let isDragging = false;
     let lastMouseX = 0; let lastMouseY = 0;
 
-    let trackData = []; 
-    let segments = [];
-    let model = null;
-    let isDetecting = false;
-    let targetLostFrames = 0; 
+    let trackData = []; let segments = [];
+    let model = null; let isDetecting = false; let targetLostFrames = 0; 
+    
+    // V5.7 전용 녹화 상태 변수
+    let activeSegmentListener = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
 
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈'];
 
@@ -261,12 +274,10 @@
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
     playerContainer.addEventListener('touchstart', startDrag, {passive: false}); window.addEventListener('touchmove', (e) => { if(isDragging) { e.preventDefault(); drag(e.touches[0]); } }, {passive: false}); window.addEventListener('touchend', endDrag);
 
-    // V5.6 핵심: 스타트 구간 대응 강화 추적 엔진
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
         isDetecting = true;
         try {
-            // [1차] 확대 캔버스 스캔 (수동으로 줌 땡겼을 때 인식률 극대화)
             const predictions = await model.detect(canvas); 
             const person = predictions.find(p => p.class === 'person');
             
@@ -285,10 +296,9 @@
                     let calculatedZoom = currentZoom * (desiredHeight / personHeightOnCanvas);
                     targetZoom = Math.max(1.0, Math.min(calculatedZoom, 8.0));
                 }
-                aiStatus.style.color = "var(--highlight-green)"; aiStatus.innerText = "🎯 추적 중";
+                if(!isRecording) { aiStatus.style.color = "var(--highlight-green)"; aiStatus.innerText = "🎯 추적 중"; }
             } else {
                 targetLostFrames++;
-                // [2차] 광각 스캔 (원본 비디오 전체에서 수색)
                 if (targetLostFrames >= 2) {
                     const fallbackPreds = await model.detect(video);
                     const fbPerson = fallbackPreds.find(p => p.class === 'person');
@@ -296,11 +306,7 @@
                         targetX = fbPerson.bbox[0] + fbPerson.bbox[2]/2;
                         targetY = fbPerson.bbox[1] + fbPerson.bbox[3]/2;
                         targetLostFrames = 0;
-                        aiStatus.style.color = "var(--highlight-blue)"; aiStatus.innerText = "⚡ 타겟 복구!";
                     } else {
-                        // V5.6 수정: 타겟을 놓쳤을 때, 오토줌이 켜져 있을 때만 1.0으로 풉니다.
-                        // 수동으로 줌을 당겨놓은 상태(isAutoZoom OFF)라면 줌을 풀지 않고 대기!
-                        aiStatus.style.color = "var(--highlight-red)"; aiStatus.innerText = "⚠️ 찾는 중...";
                         targetX = centerX; targetY = centerY;
                         if (isAutoZoom) targetZoom = 1.0; 
                     }
@@ -311,8 +317,7 @@
 
     function autoGenerateSegments() {
         if (trackData.length < 50) { alert("데이터가 부족합니다!"); return; }
-        let tempSegments = [];
-        let windowSize = 3; 
+        let tempSegments = []; let windowSize = 3; 
         let lastTime = parseFloat(trackData[trackData.length-1].t);
         const w = video.videoWidth; const h = video.videoHeight;
 
@@ -341,6 +346,7 @@
         updateSegmentListUI();
     }
 
+    // V5.7 UI 업데이트 (재생/추출/시간조절 추가)
     function updateSegmentListUI() {
         segmentListUI.innerHTML = '';
         segments.forEach(seg => {
@@ -348,12 +354,29 @@
             item.className = 'segment-item';
             let c = seg.label === '점프' ? 'jump' : seg.label === '슬라럼' ? 'slalom' : '';
             item.innerHTML = `
-                <span class="segment-time">${formatTime(seg.start)} ~ ${formatTime(seg.end)}</span>
-                <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this)">
-                    ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
-                </select>
-                <button onclick="video.currentTime=${seg.start}" style="background:none; border:1px solid #444; color:#aaa; font-size:0.75rem; padding:6px 10px; border-radius:4px; cursor:pointer;">이동</button>
-                <button onclick="deleteSegment(${seg.id})" style="background:none; border:none; color:var(--highlight-red); cursor:pointer; font-size:0.85rem; font-weight:bold;">삭제</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap: 10px;">
+                    <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this)">
+                        ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
+                    </select>
+                    <div style="display:flex; gap:6px;">
+                        <button class="action-icon-btn" onclick="playSegment(${seg.id})">▶ 재생</button>
+                        <button class="action-icon-btn" onclick="extractHighlight(${seg.id}, this)">🎬 추출</button>
+                        <button class="action-icon-btn" style="background:transparent; border:none; color:var(--highlight-red); padding: 0 5px;" onclick="deleteSegment(${seg.id})">✕</button>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
+                    <div class="time-ctrl">
+                        <button class="time-btn" onclick="adjustSegmentTime(${seg.id}, 'start', -0.5)">-</button>
+                        <span style="color:var(--highlight-green); min-width:40px; text-align:center;">${formatTime(seg.start)}</span>
+                        <button class="time-btn" onclick="adjustSegmentTime(${seg.id}, 'start', 0.5)">+</button>
+                    </div>
+                    <span style="color:#555;">~</span>
+                    <div class="time-ctrl">
+                        <button class="time-btn" onclick="adjustSegmentTime(${seg.id}, 'end', -0.5)">-</button>
+                        <span style="color:var(--highlight-green); min-width:40px; text-align:center;">${formatTime(seg.end)}</span>
+                        <button class="time-btn" onclick="adjustSegmentTime(${seg.id}, 'end', 0.5)">+</button>
+                    </div>
+                </div>
             `;
             segmentListUI.appendChild(item);
         });
@@ -363,8 +386,98 @@
         const s = segments.find(i => i.id === id); 
         if (s) { s.label = el.value; el.className = 'segment-label-select ' + (s.label === '점프' ? 'jump' : s.label === '슬라럼' ? 'slalom' : ''); }
     }
-    
     function deleteSegment(id) { segments = segments.filter(s => s.id !== id); updateSegmentListUI(); }
+
+    // V5.7 시간 미세조정 로직
+    function adjustSegmentTime(id, field, delta) {
+        const seg = segments.find(s => s.id === id);
+        if (!seg) return;
+        seg[field] = Math.max(0, Math.min(video.duration || 9999, seg[field] + delta));
+        
+        // 시작 시간이 종료 시간을 넘지 않도록 방어 로직
+        if (seg.start >= seg.end) {
+            if (field === 'start') seg.end = seg.start + 0.5;
+            else seg.start = Math.max(0, seg.end - 0.5);
+        }
+        updateSegmentListUI();
+    }
+
+    // V5.7 구간 재생 로직
+    function playSegment(id) {
+        if(isRecording) return alert("현재 영상을 렌더링 중입니다. 잠시만 기다려주세요!");
+        const seg = segments.find(s => s.id === id);
+        if(!seg) return;
+
+        video.currentTime = seg.start;
+        video.play();
+        playBtn.innerText = "Ⅱ";
+
+        if(activeSegmentListener) video.removeEventListener('timeupdate', activeSegmentListener);
+        activeSegmentListener = () => {
+            if(video.currentTime >= seg.end) {
+                video.pause();
+                playBtn.innerText = "▶";
+                video.removeEventListener('timeupdate', activeSegmentListener);
+                activeSegmentListener = null;
+            }
+        };
+        video.addEventListener('timeupdate', activeSegmentListener);
+    }
+
+    // V5.7 캔버스 화면 렌더링(녹화) 추출 로직
+    async function extractHighlight(id, btnElement) {
+        if(isRecording) return alert("이미 다른 영상을 렌더링 중입니다!");
+        const seg = segments.find(s => s.id === id);
+        if(!seg) return;
+
+        isRecording = true;
+        btnElement.classList.add('recording');
+        btnElement.innerText = "🔴 녹화중...";
+        aiStatus.style.color = "var(--highlight-red)"; 
+        aiStatus.innerText = "🔴 렌더링 진행 중";
+        
+        video.currentTime = seg.start;
+        await new Promise(r => video.addEventListener('seeked', r, {once: true}));
+        
+        // 캔버스의 화면을 30FPS로 스트리밍 캡처
+        const stream = canvas.captureStream(30); 
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        recordedChunks = [];
+        
+        mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ToryMotion_${seg.label}_${Date.now()}.webm`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            isRecording = false;
+            btnElement.classList.remove('recording');
+            btnElement.innerText = "🎬 추출";
+            aiStatus.style.color = "var(--highlight-green)"; 
+            aiStatus.innerText = "🟢 AI 준비 완료";
+            alert("✅ 하이라이트 영상 추출이 완료되었습니다!");
+        };
+
+        mediaRecorder.start();
+        video.play();
+        playBtn.innerText = "Ⅱ";
+
+        if(activeSegmentListener) video.removeEventListener('timeupdate', activeSegmentListener);
+        activeSegmentListener = () => {
+            if(video.currentTime >= seg.end) {
+                video.pause();
+                playBtn.innerText = "▶";
+                mediaRecorder.stop();
+                video.removeEventListener('timeupdate', activeSegmentListener);
+                activeSegmentListener = null;
+            }
+        };
+        video.addEventListener('timeupdate', activeSegmentListener);
+    }
 
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
@@ -388,7 +501,7 @@
     }
 
     function exportData() {
-        const data = { projectName: "CrystalTory_V5.6", segments, trackData };
+        const data = { projectName: "CrystalTory_V5.7", segments, trackData };
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `motion_edit_${Date.now()}.json`; a.click();
     }
