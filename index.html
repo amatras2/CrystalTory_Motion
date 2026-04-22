@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.14 (Pro Replay Edition)</title>
+    <title>CrystalTory_Motion V5.15 (Final Stability)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -16,80 +16,94 @@
         body {
             background-color: var(--tuxedo-black); color: var(--tuxedo-white);
             font-family: 'Pretendard', sans-serif; margin: 0; padding: 0;
-            overflow: hidden; /* 전체 스크롤 방지, 내부 스크롤 사용 */
-            display: flex; flex-direction: column; height: 100vh;
+            display: flex; flex-direction: column; min-height: 100vh;
         }
 
-        /* [UX 개선] 상단 고정 영역 (헤더 + 플레이어) */
-        .sticky-top {
+        /* [핵심] 상단 고정 플레이어 영역 */
+        .player-section {
             position: sticky; top: 0; z-index: 100;
             background: var(--tuxedo-black);
-            border-bottom: 1px solid var(--border);
+            border-bottom: 2px solid var(--border);
+            width: 100%;
         }
 
         header {
-            padding: 10px 20px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
+            padding: 10px 15px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
             display: flex; justify-content: space-between; align-items: center;
         }
-        .logo { font-size: 1.1rem; font-weight: 800; }
-        .status-badge { font-size: 0.7rem; padding: 3px 6px; border-radius: 4px; background: #333; color: #aaa; font-weight: bold; }
-
-        /* [UX 개선] 아래 스크롤 가능 영역 */
-        .scrollable-content {
-            flex: 1; overflow-y: auto; padding: 15px;
-            display: flex; flex-direction: column; gap: 15px;
-        }
+        .logo { font-size: 1rem; font-weight: 800; }
+        .logo span { color: var(--point-silver); font-weight: 300; }
+        .status-badge { font-size: 0.65rem; padding: 3px 6px; border-radius: 4px; background: #333; color: #aaa; font-weight: bold; }
 
         .player-container {
-            position: relative; background: #000;
-            aspect-ratio: 16 / 9; width: 100%; max-width: 800px; margin: 0 auto;
-            border-bottom: 1px solid var(--border); overflow: hidden;
+            position: relative; background: #000; width: 100%; 
+            aspect-ratio: 16 / 9; max-height: 40vh; margin: 0 auto; overflow: hidden;
         }
-        #motionCanvas { width: 100%; height: 100%; display: block; }
-        
-        .player-ui-bar {
-            padding: 10px 20px; background: var(--tuxedo-dark);
+        #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+        #motionCanvas:active { cursor: grabbing; }
+
+        .player-controls {
+            padding: 8px 15px; background: var(--tuxedo-dark);
             display: flex; flex-direction: column; gap: 5px;
         }
 
+        /* [핵심] 하단 스크롤 편집 영역 */
+        .editor-section {
+            flex: 1; padding: 15px; display: flex; flex-direction: column; gap: 15px;
+            background: var(--tuxedo-black);
+        }
+
+        .btn-row { display: flex; gap: 10px; margin-bottom: 5px; }
+        .action-btn { 
+            flex: 1; background: #222; border: 1px solid #444; color: #ddd; 
+            padding: 12px; border-radius: 8px; text-align: center; font-size: 0.85rem; 
+            cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); }
+        .btn-success { border-color: var(--highlight-green); color: var(--highlight-green); }
+
+        .toggle-group { display: flex; gap: 8px; }
         .toggle-btn {
-            background: #333; color: white; border: 1px solid #555; padding: 6px;
-            border-radius: 4px; font-size: 0.75rem; cursor: pointer; flex: 1; font-weight: bold;
+            flex: 1; background: #333; color: white; border: 1px solid #555; padding: 8px;
+            border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: bold;
         }
         .toggle-btn.active { background: #002200; color: var(--highlight-green); border-color: var(--highlight-green); }
 
-        /* 타임라인 항목 스타일 */
+        .timeline-box {
+            background: var(--tuxedo-dark); border-radius: 12px; border: 1px solid var(--border);
+            display: flex; flex-direction: column;
+        }
+        .timeline-header {
+            padding: 12px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
         .segment-item { 
-            display: flex; flex-direction: column; gap: 8px; background: #111; 
-            padding: 12px; border-radius: 8px; border: 1px solid #222; transition: 0.3s;
+            background: #111; padding: 12px; border-radius: 8px; border: 1px solid #222;
+            display: flex; flex-direction: column; gap: 8px; transition: 0.3s;
         }
-        /* [UX 개선] 현재 재생 중인 구간 강조 */
-        .segment-item.active {
-            border-color: var(--highlight-green);
-            background: #1a221a;
-            box-shadow: 0 0 10px rgba(191, 255, 0, 0.2);
-        }
+        .segment-item.active { border-color: var(--highlight-green); background: #1a221a; transform: scale(1.02); }
 
-        .seg-top-row { display: flex; gap: 8px; align-items: center; }
-        .seg-check { width: 18px; height: 18px; accent-color: var(--highlight-green); }
-        .segment-label-select { background: #222; color: white; border: 1px solid #444; padding: 5px; border-radius: 4px; font-size: 0.8rem; flex: 1; }
+        .seg-row { display: flex; gap: 10px; align-items: center; }
+        .seg-select { background: #222; color: white; border: 1px solid #444; padding: 6px; border-radius: 4px; flex: 1; font-size: 0.8rem; font-weight: bold; }
+        
+        .time-ctrl { display: flex; align-items: center; gap: 8px; background: #222; padding: 4px 10px; border-radius: 6px; }
+        .time-btn { background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer; }
+        
+        .seg-seekbar { width: 100%; height: 5px; accent-color: var(--highlight-blue); cursor: pointer; }
 
-        .time-ctrl { display: flex; align-items: center; gap: 5px; background: #222; padding: 2px 6px; border-radius: 6px; }
-        .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-size: 1.1rem; }
-
-        .seg-seekbar { width: 100%; height: 4px; accent-color: var(--highlight-blue); cursor: pointer; appearance: none; background: #333; }
-
-        .batch-btn { background: #222; color: white; border: 1px solid #444; padding: 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; flex: 1; font-weight: bold; }
+        input[type=range] { accent-color: var(--highlight-green); cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div class="sticky-top">
+<div class="player-section">
     <header>
-        <div class="logo">CrystalTory <span>Motion</span> <small style="font-weight:300; font-size:0.7rem; color:#666;">V5.14</small></div>
-        <div style="display:flex; gap:8px;">
+        <div class="logo">CrystalTory <span>Motion</span></div>
+        <div style="display: flex; gap: 8px;">
+            <span id="modeStatus" class="status-badge" style="background:var(--highlight-blue); color:black;">📺 리플레이</span>
             <span id="aiStatus" class="status-badge">🧠 대기중</span>
-            <span id="modeStatus" class="status-badge" style="background:var(--highlight-blue); color:black;">📺 리플레이 모드</span>
         </div>
     </header>
 
@@ -97,46 +111,42 @@
         <canvas id="motionCanvas"></canvas>
     </div>
 
-    <div class="player-ui-bar">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">▶</button>
-            <input type="range" id="seekBar" value="0" step="0.1" style="flex: 1; accent-color: var(--highlight-green);">
-            <span id="timeDisplay" style="font-size:0.7rem; min-width:70px; text-align:right;">00:00 / 00:00</span>
+    <div class="player-controls">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:1.8rem; cursor:pointer; width:40px;">▶</button>
+            <input type="range" id="seekBar" value="0" step="0.1" style="flex: 1;">
+            <span id="timeDisplay" style="font-size:0.75rem; min-width:80px; text-align:right;">00:00/00:00</span>
         </div>
-        <div style="display: flex; gap: 8px; margin-top:5px;">
-            <button id="btnAutoZoom" class="toggle-btn" onclick="toggleAutoZoom()">🔍 오토줌: OFF</button>
-            <button id="btnShowAI" class="toggle-btn active" onclick="toggleShowAI()">👁️ 인식표시: ON</button>
+        <div class="toggle-group">
+            <button id="btnAutoZoom" class="toggle-btn" onclick="toggleAutoZoom()">🔍 오토줌 OFF</button>
+            <button id="btnShowAI" class="toggle-btn active" onclick="toggleShowAI()">👁️ 인식표시 ON</button>
             <button class="toggle-btn" style="border-color:var(--highlight-blue); color:var(--highlight-blue);" onclick="exportEntireVideo()">🎬 전체 저장</button>
         </div>
     </div>
 </div>
 
-<div class="scrollable-content">
-    <div class="file-ops">
-        <div style="display:flex; gap:10px;">
-            <label class="file-btn" style="flex:1;">🎬 영상 열기<input type="file" id="videoUpload" accept="video/*" style="display:none;"></label>
-            <label class="file-btn" style="flex:1; border-color:var(--highlight-blue); color:var(--highlight-blue);">📁 작업 불러오기<input type="file" id="jsonUpload" accept=".json" style="display:none;"></label>
-        </div>
+<div class="editor-section">
+    <div class="btn-row">
+        <label class="action-btn">🎬 영상 열기<input type="file" id="videoUpload" accept="video/*" style="display:none;"></label>
+        <label class="action-btn btn-primary">📁 작업 불러오기<input type="file" id="jsonUpload" accept=".json" style="display:none;"></label>
     </div>
 
-    <div class="timeline-editor" style="background:var(--tuxedo-dark); border-radius:12px; border:1px solid var(--border);">
-        <div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:0.85rem; font-weight:bold;">🎞️ 편집 타임라인</span>
-            <button onclick="autoGenerateSegments()" style="color:var(--highlight-green); border:none; background:none; font-weight:bold; font-size:0.8rem; cursor:pointer;">✨ 자동분석</button>
+    <div class="timeline-box">
+        <div class="timeline-header">
+            <span style="font-size:0.85rem; font-weight:bold;">🎞️ 스마트 타임라인</span>
+            <button onclick="autoGenerateSegments()" style="color:var(--highlight-green); border:none; background:none; font-weight:bold; cursor:pointer;">✨ 자동분석</button>
         </div>
-        
-        <div style="padding:8px; display:flex; gap:5px;">
-            <button class="batch-btn" onclick="batchExtract()" style="color:var(--highlight-blue);">선택 추출</button>
-            <button class="batch-btn" onclick="batchDelete()" style="color:var(--highlight-red);">선택 삭제</button>
-            <button class="batch-btn" onclick="addManualSegment()">➕ 추가</button>
+        <div style="padding:10px; display:flex; gap:8px; border-bottom:1px solid #222;">
+            <button class="toggle-btn" onclick="batchExtract()">선택 추출</button>
+            <button class="toggle-btn" onclick="batchDelete()" style="color:var(--highlight-red);">선택 삭제</button>
+            <button class="toggle-btn" onclick="addManualSegment()">➕ 구간 추가</button>
         </div>
-
         <div class="segment-list" id="segmentList"></div>
     </div>
 
-    <div style="padding-bottom: 30px; display:flex; gap:10px;">
-        <button class="batch-btn" style="padding:15px;" onclick="resetCenter()">🎯 중앙 초기화</button>
-        <button class="batch-btn" style="padding:15px; border-color:var(--highlight-green); color:var(--highlight-green);" onclick="exportData()">💾 JSON 데이터 저장</button>
+    <div class="btn-row" style="margin-top:10px;">
+        <button class="action-btn" onclick="resetCenter()">🎯 트래킹 초기화</button>
+        <button class="action-btn btn-success" onclick="exportData()">💾 JSON 저장</button>
     </div>
 </div>
 
@@ -147,73 +157,88 @@
     const canvas = document.getElementById('motionCanvas');
     const ctx = canvas.getContext('2d');
     const seekBar = document.getElementById('seekBar');
-    const zoomRange = { value: 2.5 }; // 내부 관리
-    const videoUpload = document.getElementById('videoUpload');
-    const jsonUpload = document.getElementById('jsonUpload');
     const playBtn = document.getElementById('playBtn');
     const aiStatus = document.getElementById('aiStatus');
     const modeStatus = document.getElementById('modeStatus');
     const segmentListUI = document.getElementById('segmentList');
+    const btnAutoZoom = document.getElementById('btnAutoZoom');
+    const btnShowAI = document.getElementById('btnShowAI');
 
     let currentZoom = 2.5; let targetZoom = 2.5;  
     let isAutoZoom = false; let showAIIndicator = true;
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
-    let velocityX = 0; let velocityY = 0;
     let isDragging = false; let lastMouseX = 0; let lastMouseY = 0;
 
     let trackData = []; let segments = [];
     let model = null; let isDetecting = false; 
     let detectedBBox = null;
     let activeSegmentId = null;
+    let renderStarted = false;
 
-    cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비"; });
+    // AI 모델 로드
+    cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비"; aiStatus.style.color = "var(--highlight-green)"; });
 
-    // [핵심] 리플레이 엔진: 저장된 데이터가 있는지 확인
+    // 스페이스바 단축키
+    window.addEventListener('keydown', (e) => { if(e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); togglePlay(); } });
+
+    // 드래그 로직 (모바일/PC 공용)
+    const startDrag = (e) => { 
+        isDragging = true; 
+        const ev = e.touches ? e.touches[0] : e;
+        lastMouseX = ev.clientX; lastMouseY = ev.clientY; 
+    };
+    const doDrag = (e) => {
+        if (!isDragging) return;
+        const ev = e.touches ? e.touches[0] : e;
+        const dx = ev.clientX - lastMouseX; const dy = ev.clientY - lastMouseY;
+        const scale = ((video.videoWidth / currentZoom) / canvas.offsetWidth) * 2.0;
+        centerX -= dx * scale; centerY -= dy * scale;
+        targetX = centerX; targetY = centerY;
+        lastMouseX = ev.clientX; lastMouseY = ev.clientY;
+    };
+    canvas.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', doDrag); window.addEventListener('mouseup', () => isDragging=false);
+    canvas.addEventListener('touchstart', startDrag, {passive:false}); canvas.addEventListener('touchmove', (e) => { e.preventDefault(); doDrag(e); }, {passive:false}); canvas.addEventListener('touchend', () => isDragging=false);
+
+    // [V5.15 핵심] 데이터 기반 리플레이 엔진
     function getStoredTrack(time) {
-        const roundedTime = Math.round(time * 10) / 10;
-        return trackData.find(d => Math.abs(d.t - roundedTime) < 0.1);
+        const rounded = Math.round(time * 10) / 10;
+        return trackData.find(d => Math.abs(d.t - rounded) < 0.15);
     }
 
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
         
-        // [V5.14 전략] 저장된 데이터가 있다면 AI를 돌리지 않음 (Replay Mode)
         const stored = getStoredTrack(video.currentTime);
         if (stored) {
             targetX = stored.x; targetY = stored.y; targetZoom = stored.z;
-            modeStatus.innerText = "📺 리플레이 모드";
-            modeStatus.style.background = "var(--highlight-blue)";
-            detectedBBox = null;
-            return;
+            modeStatus.innerText = "📺 리플레이"; modeStatus.style.background = "var(--highlight-blue)";
+            detectedBBox = null; return;
         }
 
-        // 데이터가 없는 구간만 실시간 분석 (Record Mode)
         isDetecting = true;
-        modeStatus.innerText = "🔴 실시간 레코딩";
-        modeStatus.style.background = "var(--highlight-red)";
-        
+        modeStatus.innerText = "🔴 레코딩"; modeStatus.style.background = "var(--highlight-red)";
         try {
             const predictions = await model.detect(canvas); 
             const person = predictions.find(p => p.class === 'person');
             if (person) {
                 detectedBBox = person.bbox;
-                const viewW = canvas.width / currentZoom; const viewH = canvas.height / currentZoom;
-                targetX = (centerX - viewW/2) + (person.bbox[0] + person.bbox[2]/2) / canvas.width * viewW;
-                targetY = (centerY - viewH/2) + (person.bbox[1] + person.bbox[3]/2) / canvas.height * viewH;
-                if(isAutoZoom) targetZoom = Math.max(1.5, Math.min(8.0, currentZoom * (canvas.height * 0.45 / person.bbox[3])));
+                const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
+                targetX = (centerX - vW/2) + (person.bbox[0] + person.bbox[2]/2) / canvas.width * vW;
+                targetY = (centerY - vH/2) + (person.bbox[1] + person.bbox[3]/2) / canvas.height * vH;
+                if(isAutoZoom) targetZoom = Math.max(1.2, Math.min(8.0, currentZoom * (canvas.height * 0.45 / person.bbox[3])));
             }
         } finally { isDetecting = false; }
     }
 
     function render() {
-        if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
+        if (video.readyState < 2) { requestAnimationFrame(render); return; }
         if (!video.paused && !isDragging) detectPerson();
 
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         if (!isDragging) {
-            centerX += (targetX - centerX) * 0.15; centerY += (targetY - centerY) * 0.15;
-            currentZoom += (targetZoom - currentZoom) * 0.1;
+            centerX += (targetX - centerX) * 0.12; centerY += (targetY - centerY) * 0.12;
+            currentZoom += (targetZoom - currentZoom) * 0.08;
         }
 
         const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
@@ -222,31 +247,29 @@
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
 
         if (showAIIndicator && detectedBBox) {
-            ctx.strokeStyle = "var(--highlight-blue)"; ctx.setLineDash([5, 5]);
-            ctx.strokeRect(0, 0, canvas.width, canvas.height); // 간이 표시
+            const sX = canvas.width / vW; const sY = canvas.height / vH;
+            ctx.strokeStyle = "var(--highlight-blue)"; ctx.lineWidth = 4;
+            ctx.strokeRect((detectedBBox[0]-(centerX-vW/2))*sX, (detectedBBox[1]-(centerY-vH/2))*sY, detectedBBox[2]*sX, detectedBBox[3]*sY);
         }
 
         if (!video.paused) {
-            const cur = video.currentTime;
-            seekBar.value = cur;
-            // 실시간 모드일 때만 데이터 저장
-            if (modeStatus.innerText.includes("레코딩") && Math.floor(cur * 10) % 2 === 0) {
+            const cur = video.currentTime; seekBar.value = cur;
+            if (modeStatus.innerText === "🔴 레코딩" && Math.floor(cur * 10) % 2 === 0) {
                 trackData = trackData.filter(d => Math.abs(d.t - cur) > 0.1);
                 trackData.push({ t: Math.round(cur * 10) / 10, x: centerX, y: centerY, z: currentZoom });
             }
-            updateActiveSegmentHighlight(cur);
+            updateActiveSegment(cur);
         }
         document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
         requestAnimationFrame(render);
     }
 
-    // [UX 개선] 현재 재생 중인 구간 강조 및 스크롤 연동
-    function updateActiveSegmentHighlight(time) {
+    function updateActiveSegment(time) {
         const active = segments.find(s => time >= s.start && time <= s.end);
         if (active && active.id !== activeSegmentId) {
             activeSegmentId = active.id;
             document.querySelectorAll('.segment-item').forEach(el => el.classList.remove('active'));
-            const activeEl = document.getElementById(`seg_item_${active.id}`);
+            const activeEl = document.getElementById(`seg_${active.id}`);
             if (activeEl) {
                 activeEl.classList.add('active');
                 activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -254,49 +277,18 @@
         }
     }
 
-    // [기능 추가] 전체 하이라이트 영상 저장
-    async function exportEntireVideo() {
-        if(!confirm("현재까지 편집된 전체 영상을 하이라이트로 추출할까요?")) return;
-        
-        const originalTime = video.currentTime;
-        video.pause();
-        video.currentTime = 0;
-        await new Promise(r => video.onseeked = r);
-
-        const stream = canvas.captureStream(30);
-        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-        const chunks = [];
-        recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'video/webm' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-            a.download = `Tory_Highlight_Full_${Date.now()}.webm`; a.click();
-            video.currentTime = originalTime;
-            alert("✅ 전체 하이라이트 영상 저장이 완료되었습니다!");
-        };
-
-        recorder.start();
-        video.play();
-        
-        const checker = () => {
-            if(video.currentTime >= video.duration - 0.1) {
-                video.pause(); recorder.stop();
-                video.removeEventListener('timeupdate', checker);
-            }
-        };
-        video.addEventListener('timeupdate', checker);
-    }
-
-    // --- 기본 유틸리티 함수들 ---
-    function formatTime(s) { const m = Math.floor(s/60); const sec = Math.floor(s%60); return m.toString().padStart(2,'0')+":"+sec.toString().padStart(2,'0'); }
-    function togglePlay() { video.paused ? (video.play(), playBtn.innerText="Ⅱ") : (video.pause(), playBtn.innerText="▶"); }
-    function toggleAutoZoom() { isAutoZoom = !isAutoZoom; btnAutoZoom.innerText = isAutoZoom ? "🔍 오토줌: ON" : "🔍 오토줌: OFF"; btnAutoZoom.classList.toggle('active'); }
-    function toggleShowAI() { showAIIndicator = !showAIIndicator; btnShowAI.innerText = showAIIndicator ? "👁️ 인식표시: ON" : "👁️ 인식표시: OFF"; btnShowAI.classList.toggle('active'); }
-    function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; targetZoom = 2.5; trackData = []; alert("트래킹 데이터를 초기화했습니다."); }
-
+    // 파일 업로드 처리
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) { video.src = URL.createObjectURL(file); video.onloadedmetadata = () => { seekBar.max = video.duration; render(); }; }
+        if (file) { 
+            video.src = URL.createObjectURL(file); 
+            video.onloadedmetadata = () => { 
+                seekBar.max = video.duration; 
+                centerX = video.videoWidth/2; centerY = video.videoHeight/2;
+                targetX = centerX; targetY = centerY;
+                if(!renderStarted) { renderStarted = true; render(); }
+            }; 
+        }
     });
 
     jsonUpload.addEventListener('change', (e) => {
@@ -305,8 +297,8 @@
         const reader = new FileReader();
         reader.onload = (ev) => {
             const data = JSON.parse(ev.target.result);
-            if(data.trackData) trackData = data.trackData;
-            if(data.segments) segments = data.segments;
+            trackData = data.trackData || [];
+            segments = data.segments || [];
             updateSegmentListUI();
         };
         reader.readAsText(file);
@@ -316,73 +308,60 @@
         segmentListUI.innerHTML = '';
         segments.forEach(seg => {
             const item = document.createElement('div');
-            item.className = 'segment-item';
-            item.id = `seg_item_${seg.id}`;
+            item.className = 'segment-item'; item.id = `seg_${seg.id}`;
             item.innerHTML = `
-                <div class="seg-top-row">
+                <div class="seg-row">
                     <input type="checkbox" class="seg-check" ${seg.selected?'checked':''} onchange="toggleSelect(${seg.id})">
-                    <select class="segment-label-select" onchange="updateLabel(${seg.id}, this.value)">
-                        ${MOTION_TAGS.map(t => `<option value="${t}" ${seg.label===t?'selected':''}>${t}</option>`).join('')}
+                    <select class="seg-select" onchange="updateLabel(${seg.id}, this.value)">
+                        ${['기본 트래킹', '스타트', '슬라럼', '점프', '에어 타임', '피니시'].map(t => `<option value="${t}" ${seg.label===t?'selected':''}>${t}</option>`).join('')}
                     </select>
-                    <button class="action-icon-btn" onclick="video.currentTime=${seg.start}; togglePlay();">▶</button>
+                    <button class="action-btn" style="padding:5px 10px;" onclick="video.currentTime=${seg.start}; video.play(); playBtn.innerText='Ⅱ';">▶</button>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id},'start',-0.5)">-</button><span style="font-size:0.75rem;">${formatTime(seg.start)}</span><button class="time-btn" onclick="adjustTime(${seg.id},'start',0.5)">+</button></div>
-                    <span style="color:#444;">~</span>
                     <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id},'end',-0.5)">-</button><span style="font-size:0.75rem;">${formatTime(seg.end)}</span><button class="time-btn" onclick="adjustTime(${seg.id},'end',0.5)">+</button></div>
                 </div>
+                <input type="range" class="seg-seekbar" min="${seg.start}" max="${seg.end}" step="0.1" value="${video.currentTime}" oninput="video.currentTime=this.value;">
             `;
             segmentListUI.appendChild(item);
         });
     }
 
-    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈'];
+    // 제어 함수들
+    function togglePlay() { video.paused ? (video.play(), playBtn.innerText="Ⅱ") : (video.pause(), playBtn.innerText="▶"); }
+    function toggleAutoZoom() { isAutoZoom = !isAutoZoom; btnAutoZoom.innerText = isAutoZoom ? "🔍 오토줌 ON" : "🔍 오토줌 OFF"; btnAutoZoom.classList.toggle('active'); }
+    function toggleShowAI() { showAIIndicator = !showAIIndicator; btnShowAI.innerText = showAIIndicator ? "👁️ 인식표시 ON" : "👁️ 인식표시 OFF"; btnShowAI.classList.toggle('active'); }
+    function formatTime(s) { const m = Math.floor(s/60); const sec = Math.floor(s%60); return m.toString().padStart(2,'0')+":"+sec.toString().padStart(2,'0'); }
+    function adjustTime(id, f, d) { const s = segments.find(i=>i.id===id); if(s) { s[f] = Math.max(0, Math.min(video.duration, s[f]+d)); updateSegmentListUI(); } }
     function toggleSelect(id) { const s = segments.find(i=>i.id===id); if(s) s.selected = !s.selected; }
     function updateLabel(id, v) { const s = segments.find(i=>i.id===id); if(s) s.label = v; }
-    function adjustTime(id, f, d) {
-        const s = segments.find(i=>i.id===id); if(!s) return;
-        s[f] = Math.max(0, Math.min(video.duration, s[f]+d));
-        updateSegmentListUI();
-    }
-    function addManualSegment() {
-        const ct = video.currentTime;
-        segments.push({ id: Date.now(), start: ct, end: Math.min(video.duration, ct+3), label: '기본 트래킹', selected: false });
-        segments.sort((a,b)=>a.start-b.start); updateSegmentListUI();
-    }
+    function addManualSegment() { segments.push({ id: Date.now(), start: video.currentTime, end: Math.min(video.duration, video.currentTime+3), label: '기본 트래킹', selected: false }); segments.sort((a,b)=>a.start-b.start); updateSegmentListUI(); }
     function batchDelete() { segments = segments.filter(s=>!s.selected); updateSegmentListUI(); }
-    function exportData() {
-        const data = { trackData, segments };
-        const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Tory_Work_${Date.now()}.json`; a.click();
+    function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; targetZoom = 2.5; trackData = []; alert("데이터 초기화됨"); }
+    function exportData() { const data = { trackData, segments }; const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Tory_Work.json`; a.click(); }
+
+    async function exportEntireVideo() {
+        if(!confirm("전체 영상을 하이라이트로 추출할까요?")) return;
+        video.currentTime = 0; await new Promise(r => video.onseeked = r);
+        const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Tory_Full_Highlight.webm`; a.click();
+        };
+        recorder.start(); video.play();
+        video.ontimeupdate = () => { if(video.currentTime >= video.duration - 0.1) { video.pause(); recorder.stop(); video.ontimeupdate = null; } };
     }
 
-    // 마우스/터치 드래그 로직 복구
-    playerContainer.addEventListener('mousedown', (e) => { isDragging=true; lastMouseX=e.clientX; lastMouseY=e.clientY; });
-    window.addEventListener('mousemove', (e) => {
-        if(!isDragging) return;
-        const dx = e.clientX - lastMouseX; const dy = e.clientY - lastMouseY;
-        const scale = ((video.videoWidth/currentZoom)/playerContainer.offsetWidth)*2.5;
-        centerX -= dx*scale; centerY -= dy*scale;
-        targetX = centerX; targetY = centerY; lastMouseX=e.clientX; lastMouseY=e.clientY;
-    });
-    window.addEventListener('mouseup', () => isDragging=false);
-
-    // 구간 자동 생성 (패턴 분석 기반)
     function autoGenerateSegments() {
-        if(trackData.length < 10) return alert("데이터가 부족합니다. 먼저 영상을 재생하여 트래킹 데이터를 생성하세요.");
-        segments = [];
-        let win = 3;
+        segments = []; let win = 3;
         for(let t=0; t<video.duration; t+=win) {
-            const chunk = trackData.filter(d => d.t >= t && d.t < t+win);
-            if(chunk.length > 0) {
-                const ys = chunk.map(d=>d.y);
-                const diffY = Math.max(...ys) - Math.min(...ys);
-                let label = diffY > canvas.height * 0.1 ? '점프' : '기본 트래킹';
-                segments.push({ id: Date.now()+t, start: t, end: t+win, label, selected: false });
-            }
+            segments.push({ id: Date.now()+t, start: t, end: Math.min(video.duration, t+win), label: '기본 트래킹', selected: false });
         }
         updateSegmentListUI();
     }
+
+    seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
 </script>
 </body>
 </html>
