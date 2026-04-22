@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.9 (Batch & Filter)</title>
+    <title>CrystalTory_Motion V5.11 (Stable Editor)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -42,6 +42,7 @@
             overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border);
             cursor: grab; width: 100%; transition: border-color 0.2s;
         }
+        .player-container:active { cursor: grabbing; }
         #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
         
         .playback-controls { display: flex; justify-content: center; gap: 20px; align-items: center; margin-top: 5px; }
@@ -56,7 +57,12 @@
         input[type=range] { flex: 1; accent-color: var(--highlight-green); cursor: pointer; }
         .val-display { min-width: 40px; text-align: right; color: var(--highlight-green); font-weight: bold; }
 
-        /* V5.9 타임라인 고도화 */
+        .toggle-btn {
+            background: #333; color: white; border: 1px solid #555; padding: 6px 10px;
+            border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: 0.2s; font-weight: bold; flex: 1; text-align: center;
+        }
+        .toggle-btn.active { background: #002200; color: var(--highlight-green); border-color: var(--highlight-green); }
+
         .timeline-editor {
             background: var(--tuxedo-dark); border-radius: 12px; border: 1px solid var(--border);
             display: flex; flex-direction: column; min-height: 350px;
@@ -71,10 +77,11 @@
 
         .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 400px; }
         .segment-item { 
-            display: flex; gap: 10px; background: #111; 
-            padding: 12px; border-radius: 8px; border: 1px solid #222; align-items: flex-start;
+            display: flex; flex-direction: column; gap: 8px; background: #111; 
+            padding: 12px; border-radius: 8px; border: 1px solid #222;
         }
-        .seg-check { width: 20px; height: 20px; accent-color: var(--highlight-green); cursor: pointer; margin-top: 10px; }
+        .seg-top-row { display: flex; gap: 10px; align-items: center; }
+        .seg-check { width: 18px; height: 18px; accent-color: var(--highlight-green); cursor: pointer; }
 
         .segment-label-select { 
             background: #222; color: white; border: 1px solid #444; padding: 6px; 
@@ -87,17 +94,17 @@
             background: #333; border: 1px solid #555; color: white; padding: 6px 10px; 
             border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: bold;
         }
-        .action-icon-btn.recording { background: var(--highlight-red); border-color: var(--highlight-red); animation: pulse 1.5s infinite; }
         
         .time-ctrl { display: flex; align-items: center; gap: 5px; background: #222; padding: 4px 8px; border-radius: 6px; border: 1px solid #333;}
         .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-weight: bold; font-size: 1rem; }
+
+        .seg-seekbar { width: 100%; height: 6px; accent-color: var(--highlight-blue); margin-top: 5px; cursor: pointer; background: #333; border-radius: 3px; appearance: none; }
+        .seg-seekbar::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; background: var(--highlight-blue); border-radius: 50%; }
 
         .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px;}
         .btn-group { display: flex; gap: 10px; }
         .action-btn { flex: 1; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; }
         .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); }
-
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -107,7 +114,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 대기중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.9 🐾</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.11 🐾</div>
     </div>
 </header>
 
@@ -137,7 +144,10 @@
             <label>줌 배율</label>
             <input type="range" id="zoomRange" min="1" max="8" step="0.1" value="2.5">
             <span class="val-display" id="zoomVal">2.5x</span>
-            <button id="btnAutoZoom" class="auto-zoom-btn" onclick="toggleAutoZoom()">오토줌 OFF</button>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button id="btnAutoZoom" class="toggle-btn" onclick="toggleAutoZoom()">🔍 오토줌: ⚪ OFF</button>
+            <button id="btnShowAI" class="toggle-btn active" onclick="toggleShowAI()">👁️ 인식 표시: 🟢 ON</button>
         </div>
     </div>
 
@@ -145,11 +155,15 @@
         <div class="timeline-header">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size: 0.85rem; font-weight:bold;">🎥 스마트 분석 타임라인</span>
-                <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-green); font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 자동 분석</button>
+                <div style="display:flex; gap: 8px;">
+                    <button onclick="addManualSegment()" style="background:none; border:1px solid #555; color:white; padding:4px 8px; border-radius:4px; font-size:0.75rem; cursor:pointer;">➕ 새 구간</button>
+                    <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-green); font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 자동 분석</button>
+                </div>
             </div>
             <div class="filter-bar">
                 <select id="tagFilter" class="filter-select" onchange="updateSegmentListUI()">
                     <option value="전체">전체 보기</option>
+                    <option value="스타트">스타트 구간만</option>
                     <option value="점프">점프 구간만</option>
                     <option value="슬라럼">슬라럼 구간만</option>
                     <option value="기본 트래킹">트래킹만</option>
@@ -188,9 +202,12 @@
     const wakeLockStatus = document.getElementById('wakeLockStatus');
     const segmentListUI = document.getElementById('segmentList');
     const tagFilter = document.getElementById('tagFilter');
+    const btnAutoZoom = document.getElementById('btnAutoZoom');
+    const btnShowAI = document.getElementById('btnShowAI');
 
     let currentZoom = 2.5; let targetZoom = 2.5;  
-    let isAutoZoom = false; let centerX = 0; let centerY = 0;
+    let isAutoZoom = false; let showAIIndicator = true;
+    let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
     let velocityX = 0; let velocityY = 0;
     let isDragging = false; let lastMouseX = 0; let lastMouseY = 0;
@@ -198,28 +215,49 @@
     let trackData = []; let segments = [];
     let model = null; let isDetecting = false; let targetLostFrames = 0; 
     let wakeLock = null;
+    let detectedBBox = null; 
+    
+    // [검수 조치 1] 이벤트 리스너 누수 방지용 글로벌 변수
+    let activeSegmentListener = null;
 
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈'];
 
     cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비 완료"; aiStatus.style.color = "var(--highlight-green)"; });
 
-    // V5.9 화면 꺼짐 방지 로직
-    async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                wakeLockStatus.innerText = "💡";
-                wakeLockStatus.title = "화면 유지 중";
-            }
-        } catch (err) { console.error(`${err.name}, ${err.message}`); }
-    }
+    playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
+    playerContainer.addEventListener('touchstart', startDrag, {passive: false}); 
+    window.addEventListener('touchmove', (e) => { if(isDragging) { e.preventDefault(); drag(e); } }, {passive: false}); 
+    window.addEventListener('touchend', endDrag);
 
+    function startDrag(e) { 
+        isDragging = true; 
+        lastMouseX = e.clientX || (e.touches && e.touches[0].clientX); 
+        lastMouseY = e.clientY || (e.touches && e.touches[0].clientY); 
+        velocityX = 0; velocityY = 0; 
+    }
+    function drag(e) {
+        if (!isDragging) return;
+        const cx = e.clientX || (e.touches && e.touches[0].clientX);
+        const cy = e.clientY || (e.touches && e.touches[0].clientY);
+        const dx = cx - lastMouseX; const dy = cy - lastMouseY;
+        const scale = ((video.videoWidth / currentZoom) / playerContainer.offsetWidth) * 2.5;
+        centerX -= dx * scale; centerY -= dy * scale;
+        targetX = centerX; targetY = centerY;
+        lastMouseX = cx; lastMouseY = cy;
+    }
+    function endDrag() { isDragging = false; }
+
+    video.addEventListener('seeked', () => {
+        velocityX = 0; velocityY = 0;
+        targetLostFrames = 0;
+        targetX = centerX; targetY = centerY;
+    });
+
+    async function requestWakeLock() {
+        try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLockStatus.innerText = "💡"; } } catch (err) {}
+    }
     function releaseWakeLock() {
-        if (wakeLock !== null) {
-            wakeLock.release(); wakeLock = null;
-            wakeLockStatus.innerText = "🚫";
-            wakeLockStatus.title = "화면 유지 꺼짐";
-        }
+        if (wakeLock !== null) { wakeLock.release(); wakeLock = null; wakeLockStatus.innerText = "🚫"; }
     }
 
     videoUpload.addEventListener('change', (e) => {
@@ -230,7 +268,7 @@
                 seekBar.max = video.duration;
                 centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
-                trackData = []; render();
+                trackData = []; segments = []; updateSegmentListUI(); render();
             };
         }
     });
@@ -254,8 +292,13 @@
 
     function toggleAutoZoom() {
         isAutoZoom = !isAutoZoom;
-        const btn = document.getElementById('btnAutoZoom');
-        isAutoZoom ? (btn.classList.add('active'), btn.innerText = "✨ 오토줌 ON") : (btn.classList.remove('active'), btn.innerText = "오토줌 OFF");
+        isAutoZoom ? (btnAutoZoom.classList.add('active'), btnAutoZoom.innerText = "🔍 오토줌: 🟢 ON") 
+                   : (btnAutoZoom.classList.remove('active'), btnAutoZoom.innerText = "🔍 오토줌: ⚪ OFF");
+    }
+    function toggleShowAI() {
+        showAIIndicator = !showAIIndicator;
+        showAIIndicator ? (btnShowAI.classList.add('active'), btnShowAI.innerText = "👁️ 인식 표시: 🟢 ON") 
+                        : (btnShowAI.classList.remove('active'), btnShowAI.innerText = "👁️ 인식 표시: ⚪ OFF");
     }
 
     zoomRange.addEventListener('input', (e) => { 
@@ -263,19 +306,6 @@
         targetZoom = parseFloat(e.target.value); currentZoom = targetZoom;
         zoomVal.innerText = targetZoom.toFixed(1) + 'x'; 
     });
-
-    // 드래그 및 관성 추적 로직 (V5.8 유지)
-    playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
-    function startDrag(e) { isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; velocityX = 0; velocityY = 0; }
-    function drag(e) {
-        if (!isDragging) return;
-        const dx = e.clientX - lastMouseX; const dy = e.clientY - lastMouseY;
-        const scale = ((video.videoWidth / currentZoom) / playerContainer.offsetWidth) * 2.5;
-        centerX -= dx * scale; centerY -= dy * scale;
-        targetX = centerX; targetY = centerY;
-        lastMouseX = e.clientX; lastMouseY = e.clientY;
-    }
-    function endDrag() { isDragging = false; }
 
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
@@ -287,6 +317,7 @@
             
             if (person) {
                 targetLostFrames = 0; 
+                detectedBBox = person.bbox; 
                 const bx = person.bbox[0] + person.bbox[2]/2; const by = person.bbox[1] + person.bbox[3]/2;
                 const viewW = canvas.width / currentZoom; const viewH = canvas.height / currentZoom;
                 let nTX = (centerX - viewW/2) + (bx / canvas.width) * viewW;
@@ -295,6 +326,7 @@
                 targetX = nTX; targetY = nTY;
             } else {
                 targetLostFrames++;
+                detectedBBox = null;
                 if (targetLostFrames < 45) { targetX += velocityX; targetY += velocityY; velocityX *= 0.95; velocityY *= 0.95; }
             }
         } finally { isDetecting = false; }
@@ -310,20 +342,20 @@
             item.className = 'segment-item';
             let c = seg.label === '점프' ? 'jump' : seg.label === '슬라럼' ? 'slalom' : '';
             item.innerHTML = `
-                <input type="checkbox" class="seg-check" ${seg.selected ? 'checked' : ''} onchange="toggleSelect(${seg.id})">
-                <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this)">
-                            ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
-                        </select>
-                        <button class="action-icon-btn" onclick="playSegment(${seg.id})">▶</button>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem;">${formatTime(seg.start)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', 0.5)">+</button></div>
-                        <span style="color:#444;">~</span>
-                        <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem;">${formatTime(seg.end)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', 0.5)">+</button></div>
-                    </div>
+                <div class="seg-top-row">
+                    <input type="checkbox" class="seg-check" ${seg.selected ? 'checked' : ''} onchange="toggleSelect(${seg.id})">
+                    <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this)">
+                        ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
+                    </select>
+                    <button class="action-icon-btn" onclick="splitSegment(${seg.id})" title="현재 시간에 맞춰 구간을 분할합니다">✂ 분할</button>
+                    <button class="action-icon-btn" onclick="playSegment(${seg.id})">▶ 재생</button>
                 </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem;">${formatTime(seg.start)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', 0.5)">+</button></div>
+                    <span style="color:#444;">~</span>
+                    <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem;">${formatTime(seg.end)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', 0.5)">+</button></div>
+                </div>
+                <input type="range" class="seg-seekbar" min="${seg.start}" max="${seg.end}" step="0.1" value="${video.currentTime}" oninput="video.currentTime=this.value;" id="seek_${seg.id}">
             `;
             segmentListUI.appendChild(item);
         });
@@ -344,17 +376,88 @@
         segments = segments.filter(s => !s.selected);
         updateSegmentListUI();
     }
+    
+    function updateSegmentLabel(id, el) { 
+        const s = segments.find(i => i.id === id); 
+        if (s) { s.label = el.value; updateSegmentListUI(); }
+    }
 
+    function addManualSegment() {
+        const ct = video.currentTime || 0;
+        segments.push({ id: Date.now(), start: ct, end: Math.min(video.duration, ct + 3), label: '기본 트래킹', selected: false });
+        segments.sort((a, b) => a.start - b.start);
+        updateSegmentListUI();
+    }
+
+    function splitSegment(id) {
+        const idx = segments.findIndex(s => s.id === id);
+        if(idx === -1) return;
+        const seg = segments[idx];
+        let mid = video.currentTime;
+        if (mid <= seg.start || mid >= seg.end) { mid = (seg.start + seg.end) / 2; }
+        
+        const newSeg = { id: Date.now(), start: mid, end: seg.end, label: seg.label, selected: false };
+        seg.end = mid;
+        segments.splice(idx + 1, 0, newSeg);
+        updateSegmentListUI();
+    }
+
+    // [검수 조치 3] 소수점 연산 오류 방어
+    function adjustTime(id, f, d) {
+        const s = segments.find(i => i.id === id); if(!s) return;
+        const oldVal = s[f];
+        
+        // 부동소수점 오차(예: 1.0 + 0.5 = 1.500000000001) 해결을 위해 소수점 첫째 자리에서 반올림
+        s[f] = Math.round(Math.max(0, Math.min(video.duration || 9999, s[f] + d)) * 10) / 10; 
+        
+        if (s.start >= s.end) {
+            if (f === 'start') s.end = Math.round((s.start + 0.5) * 10) / 10; 
+            else s.start = Math.max(0, Math.round((s.end - 0.5) * 10) / 10);
+        }
+        
+        if (f === 'end') {
+            const next = segments.find(i => Math.abs(i.start - oldVal) < 0.15);
+            if (next) next.start = s.end;
+        } else if (f === 'start') {
+            const prev = segments.find(i => Math.abs(i.end - oldVal) < 0.15);
+            if (prev) prev.end = s.start;
+        }
+        updateSegmentListUI();
+    }
+
+    function playSegment(id) {
+        const s = segments.find(i => i.id === id); if(!s) return;
+        
+        // [검수 조치 1] 이전 리스너가 있다면 제거 (메모리 누수 및 오작동 방지)
+        if (activeSegmentListener) {
+            video.removeEventListener('timeupdate', activeSegmentListener);
+            activeSegmentListener = null;
+        }
+
+        video.currentTime = s.start; 
+        video.play(); 
+        playBtn.innerText = "Ⅱ";
+        requestWakeLock();
+
+        activeSegmentListener = () => { 
+            if(video.currentTime >= s.end) { 
+                video.pause(); 
+                playBtn.innerText = "▶";
+                releaseWakeLock();
+                video.removeEventListener('timeupdate', activeSegmentListener); 
+                activeSegmentListener = null;
+            } 
+        };
+        video.addEventListener('timeupdate', activeSegmentListener);
+    }
+
+    // 일괄 추출 로직 (V5.9와 동일)
     async function batchExtract() {
         const selectedSegs = segments.filter(s => s.selected);
         if(selectedSegs.length === 0) return;
         alert(`${selectedSegs.length}개의 구간을 순차적으로 추출합니다. 브라우저 팝업을 허용해주세요.`);
-        
-        for(let seg of selectedSegs) {
-            await extractSegment(seg);
-        }
+        for(let seg of selectedSegs) { await extractSegment(seg); }
     }
-
     async function extractSegment(seg) {
         return new Promise(async (resolve) => {
             aiStatus.innerText = `🔴 추출 중: ${seg.label}`;
@@ -369,6 +472,7 @@
                 const blob = new Blob(chunks, { type: 'video/webm' });
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
                 a.download = `Tory_${seg.label}_${formatTime(seg.start)}.webm`; a.click();
+                aiStatus.innerText = "🟢 AI 준비 완료";
                 resolve();
             };
             recorder.start(); video.play();
@@ -382,49 +486,36 @@
         });
     }
 
-    function autoGenerateSegments() {
-        if (trackData.length < 50) return alert("데이터 부족");
-        let temp = []; let windowSize = 3; let lastT = parseFloat(trackData[trackData.length-1].t);
-        const w = video.videoWidth; const h = video.videoHeight;
-        for (let sT = 0; sT < lastT; sT += windowSize) {
-            let chunk = trackData.filter(d => d.t >= sT && d.t < sT + windowSize);
-            if (chunk.length === 0) continue;
-            let xs = chunk.map(d => parseFloat(d.x)); let ys = chunk.map(d => parseFloat(d.y));
-            let diffX = Math.max(...xs) - Math.min(...xs); let diffY = Math.max(...ys) - Math.min(...ys);
-            let label = '기본 트래킹';
-            if (diffY > h * 0.15) label = '점프'; else if (diffX > w * 0.20) label = '슬라럼';
-            temp.push({ start: sT, end: sT + windowSize, label: label, selected: false });
-        }
-        segments = temp.map((m, idx) => ({ id: Date.now() + idx, ...m }));
-        updateSegmentListUI();
-    }
-
-    function adjustTime(id, f, d) {
-        const s = segments.find(i => i.id === id); if(!s) return;
-        s[f] = Math.max(0, s[f] + d); updateSegmentListUI();
-    }
-
-    function playSegment(id) {
-        const s = segments.find(i => i.id === id); if(!s) return;
-        video.currentTime = s.start; video.play(); togglePlay(true);
-        const checker = () => { if(video.currentTime >= s.end) { video.pause(); togglePlay(false); video.removeEventListener('timeupdate', checker); } };
-        video.addEventListener('timeupdate', checker);
-    }
-
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
         if (!video.paused && !isDragging) detectPerson();
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        
         if (!isDragging) {
             centerX += (targetX - centerX) * 0.15; centerY += (targetY - centerY) * 0.15;
             currentZoom += (targetZoom - currentZoom) * 0.05; zoomRange.value = currentZoom;
         }
+        
         const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
         centerX = Math.max(vW / 2, Math.min(canvas.width - vW / 2, centerX));
         centerY = Math.max(vH / 2, Math.min(canvas.height - vH / 2, centerY));
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
+        
+        if (showAIIndicator && detectedBBox) {
+            const scaleX = canvas.width / vW; const scaleY = canvas.height / vH;
+            const dX = (detectedBBox[0] - (centerX - vW/2)) * scaleX;
+            const dY = (detectedBBox[1] - (centerY - vH/2)) * scaleY;
+            const dW = detectedBBox[2] * scaleX; const dH = detectedBBox[3] * scaleY;
+            
+            ctx.strokeStyle = "rgba(0, 210, 255, 0.8)"; ctx.lineWidth = 3; ctx.setLineDash([5, 5]);
+            ctx.strokeRect(dX, dY, dW, dH); ctx.setLineDash([]);
+        }
+
         if (!video.paused) {
             seekBar.value = video.currentTime;
+            const activeInput = document.querySelector(`.seg-seekbar[min<="${video.currentTime}"][max>="${video.currentTime}"]`);
+            if(activeInput) activeInput.value = video.currentTime;
+
             if (Math.floor(video.currentTime * 10) % 2 === 0) trackData.push({t: video.currentTime, x: centerX, y: centerY, z: currentZoom});
         }
         document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
