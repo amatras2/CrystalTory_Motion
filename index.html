@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.19 (Wide-Eye Tracking)</title>
+    <title>CrystalTory_Motion V5.20 (Project Manager)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -19,7 +19,6 @@
             display: flex; flex-direction: column; min-height: 100vh;
         }
 
-        /* 상단 고정 플레이어 영역 */
         .player-section {
             position: sticky; top: 0; z-index: 100;
             background: var(--tuxedo-black); border-bottom: 2px solid var(--border); width: 100%;
@@ -36,11 +35,11 @@
 
         .player-controls { padding: 8px 15px; background: var(--tuxedo-dark); display: flex; flex-direction: column; gap: 5px; }
 
-        /* 하단 스크롤 편집 영역 */
         .editor-section { flex: 1; padding: 15px; display: flex; flex-direction: column; gap: 15px; background: var(--tuxedo-black); }
 
         .btn-row { display: flex; gap: 10px; margin-bottom: 5px; }
-        .action-btn { flex: 1; background: #222; border: 1px solid #444; color: #ddd; padding: 12px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .action-btn { flex: 1; background: #222; border: 1px solid #444; color: #ddd; padding: 12px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; font-weight: bold; transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px;}
+        .action-btn small { font-size: 0.65rem; color: #888; font-weight: normal; }
         .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); }
         .btn-success { border-color: var(--highlight-green); color: var(--highlight-green); }
 
@@ -72,7 +71,7 @@
     <header>
         <div class="logo">CrystalTory <span>Motion</span></div>
         <div style="display: flex; gap: 8px;">
-            <span id="modeStatus" class="status-badge" style="background:var(--highlight-blue); color:black;">📺 리플레이</span>
+            <span id="modeStatus" class="status-badge" style="background:var(--highlight-blue); color:black;">📺 대기중</span>
             <span id="aiStatus" class="status-badge">🧠 대기중</span>
         </div>
     </header>
@@ -99,8 +98,16 @@
 
 <div class="editor-section">
     <div class="btn-row">
-        <label class="action-btn">🎬 영상 열기<input type="file" id="videoUpload" accept="video/*" style="display:none;"></label>
-        <label class="action-btn btn-primary">📁 작업 불러오기<input type="file" id="jsonUpload" accept=".json" style="display:none;"></label>
+        <label class="action-btn">
+            🎬 1. 영상 열기
+            <small id="videoNameLabel">선택된 영상 없음</small>
+            <input type="file" id="videoUpload" accept="video/*" style="display:none;">
+        </label>
+        <label class="action-btn btn-primary">
+            📁 2. 외부 작업 불러오기
+            <small>수동으로 JSON 불러오기</small>
+            <input type="file" id="jsonUpload" accept=".json" style="display:none;">
+        </label>
     </div>
 
     <div class="timeline-box">
@@ -117,8 +124,11 @@
     </div>
 
     <div class="btn-row" style="margin-top:10px;">
-        <button class="action-btn" onclick="resetCenter()">🎯 전체 트래킹 초기화</button>
-        <button class="action-btn btn-success" onclick="exportData()">💾 JSON 저장</button>
+        <button class="action-btn" onclick="resetCenter()">🎯 데이터 초기화</button>
+        <button class="action-btn btn-success" onclick="exportData()">
+            💾 작업 내역 안전하게 저장
+            <small>브라우저 자동저장 + 파일 다운로드</small>
+        </button>
     </div>
 </div>
 
@@ -135,6 +145,7 @@
     const segmentListUI = document.getElementById('segmentList');
     const btnAutoZoom = document.getElementById('btnAutoZoom');
     const btnShowAI = document.getElementById('btnShowAI');
+    const videoNameLabel = document.getElementById('videoNameLabel');
 
     let currentZoom = 2.5; let targetZoom = 2.5;  
     let isAutoZoom = false; let showAIIndicator = true;
@@ -149,6 +160,9 @@
     let activeSegmentId = null;
     let renderStarted = false;
     let isSegDragging = false; 
+    
+    // [V5.20 핵심] 현재 작업 중인 프로젝트(영상) 이름 저장 변수
+    let currentProjectName = "Tory_Video";
 
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '낙수', '대기/이탈'];
 
@@ -193,26 +207,21 @@
         if(!isDragging) { modeStatus.innerText = "🔴 레코딩"; modeStatus.style.background = "var(--highlight-red)"; modeStatus.style.color = "white"; }
         
         try {
-            // [V5.19 🚨 핵심수정] canvas가 아닌 'video(원본 전체)'를 AI에게 통째로 넘겨줍니다!
-            // 이렇게 하면 카메라가 줌인되어 있어도, 보이지 않는 곳에 있는 사람을 다 찾아냅니다.
             const predictions = await model.detect(video); 
             const persons = predictions.filter(p => p.class === 'person');
             let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
             
             if (person) {
-                // 원본 해상도 기준의 완벽한 절대 좌표 획득
                 detectedBBox = person.bbox; 
                 let nTX = person.bbox[0] + person.bbox[2] / 2;
                 let nTY = person.bbox[1] + person.bbox[3] / 2;
                 
-                // 관성 엔진에 적용
                 velocityX = (nTX - targetX) * 0.4;
                 velocityY = (nTY - targetY) * 0.4;
                 targetX = nTX; targetY = nTY;
                 
                 if(isAutoZoom) targetZoom = Math.max(1.2, Math.min(8.0, currentZoom * (video.videoHeight * 0.45 / person.bbox[3])));
             } else {
-                // 타겟을 아주 잠깐 놓쳤을 때의 관성 부드러운 이동
                 targetX += velocityX; targetY += velocityY;
                 velocityX *= 0.90; velocityY *= 0.90;
             }
@@ -226,7 +235,6 @@
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         
         if (!isDragging) {
-            // 점프처럼 빠른 움직임을 따라가기 위해 카메라 이동 속도(0.15 -> 0.25)를 조금 더 민첩하게 수정했습니다.
             centerX += (targetX - centerX) * 0.25; 
             centerY += (targetY - centerY) * 0.25;
             currentZoom += (targetZoom - currentZoom) * 0.1;
@@ -237,7 +245,6 @@
         centerY = Math.max(vH / 2, Math.min(canvas.height - vH / 2, centerY));
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
 
-        // [V5.19 🚨 핵심수정] 좌표 변환 - 원본 영상 기준 BBox를 캔버스 배율에 맞게 다시 그려줍니다.
         if (showAIIndicator && detectedBBox && !isDragging) {
             const sX = canvas.width / vW; const sY = canvas.height / vH;
             const drawX = (detectedBBox[0] - (centerX - vW/2)) * sX;
@@ -278,15 +285,42 @@
         }
     }
 
+    // [V5.20 핵심] 로컬 스토리지에 데이터 자동 저장
+    function autoSaveToLocal() {
+        if(currentProjectName && trackData.length > 0) {
+            const data = { trackData, segments };
+            localStorage.setItem('ToryMotion_' + currentProjectName, JSON.stringify(data));
+        }
+    }
+
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) { 
+            // 파일명에서 확장자를 제외하고 프로젝트 이름으로 사용
+            currentProjectName = file.name.split('.')[0];
+            videoNameLabel.innerText = file.name;
+            
             video.src = URL.createObjectURL(file); 
             video.onloadedmetadata = () => { 
                 seekBar.max = video.duration; 
                 centerX = video.videoWidth/2; centerY = video.videoHeight/2;
                 targetX = centerX; targetY = centerY;
-                trackData = []; // 새 비디오면 데이터 완전 초기화
+                
+                // [V5.20 핵심] 스마트 파일 매칭: 이전에 이 영상으로 작업한 내역이 브라우저에 있는지 확인
+                const savedData = localStorage.getItem('ToryMotion_' + currentProjectName);
+                if (savedData) {
+                    if(confirm(`'${file.name}' 영상으로 이전에 작업하신 내역이 안전하게 보관되어 있습니다.\n편집 데이터를 복구하시겠습니까?`)) {
+                        const data = JSON.parse(savedData);
+                        trackData = data.trackData || [];
+                        segments = data.segments || [];
+                        updateSegmentListUI();
+                        if(!renderStarted) { renderStarted = true; render(); }
+                        return;
+                    }
+                }
+
+                // 기존 내역이 없거나 거절하면 초기화
+                trackData = []; 
                 segments = [{ id: Date.now(), start: 0, end: Math.floor(video.duration), label: '기본 트래킹', selected: false }];
                 updateSegmentListUI();
                 if(!renderStarted) { renderStarted = true; render(); }
@@ -302,6 +336,8 @@
             const data = JSON.parse(ev.target.result);
             trackData = data.trackData || []; segments = data.segments || [];
             updateSegmentListUI();
+            autoSaveToLocal(); // 외부 파일 불러오면 로컬스토리지에도 동기화
+            alert("✅ 외부 작업 내역을 성공적으로 불러왔습니다!");
         };
         reader.readAsText(file);
     });
@@ -333,6 +369,7 @@
             `;
             segmentListUI.appendChild(item);
         });
+        autoSaveToLocal(); // UI 변경될 때마다 자동 저장
     }
 
     function clearSegmentTrack(id) {
@@ -340,6 +377,7 @@
         if(!confirm("이 구간의 궤적을 지울까요? 지운 뒤 영상을 재생하면 AI가 새롭게 추적합니다.")) return;
         trackData = trackData.filter(d => d.t < s.start || d.t > s.end);
         alert("궤적이 삭제되었습니다. 재생(▶)하여 새로 추출하세요.");
+        autoSaveToLocal();
     }
 
     function adjustTime(id, f, d) {
@@ -380,10 +418,20 @@
     function toggleShowAI() { showAIIndicator = !showAIIndicator; btnShowAI.innerText = showAIIndicator ? "👁️ 인식표시 ON" : "👁️ 인식표시 OFF"; btnShowAI.classList.toggle('active'); }
     function formatTime(s) { const m = Math.floor(s/60); const sec = Math.floor(s%60); return m.toString().padStart(2,'0')+":"+sec.toString().padStart(2,'0'); }
     function toggleSelect(id) { const s = segments.find(i=>i.id===id); if(s) s.selected = !s.selected; }
-    function updateLabel(id, v) { const s = segments.find(i=>i.id===id); if(s) s.label = v; }
+    function updateLabel(id, v) { const s = segments.find(i=>i.id===id); if(s) s.label = v; updateSegmentListUI(); }
     function batchDelete() { segments = segments.filter(s=>!s.selected); updateSegmentListUI(); }
-    function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; targetZoom = 2.5; trackData = []; alert("초기화되었습니다. 다시 영상을 재생하면 기본 트래킹을 새로 생성합니다."); }
-    function exportData() { const data = { trackData, segments }; const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Tory_Work_Fixed.json`; a.click(); }
+    function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; targetZoom = 2.5; trackData = []; autoSaveToLocal(); alert("초기화되었습니다. 다시 영상을 재생하면 기본 트래킹을 새로 생성합니다."); }
+    
+    // [V5.20 핵심] 원본 영상 이름과 짝을 맞추어 파일 저장
+    function exportData() { 
+        autoSaveToLocal();
+        const data = { trackData, segments }; 
+        const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); 
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
+        a.download = `${currentProjectName}_MotionData.json`; 
+        a.click(); 
+        alert("브라우저 자동 저장이 완료되었으며, 외부 백업용 파일도 다운로드되었습니다.");
+    }
 
     function playSegment(id) {
         const s = segments.find(i=>i.id===id); if(!s) return;
@@ -399,7 +447,7 @@
         const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
             const blob = new Blob(chunks, { type: 'video/webm' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Tory_Full_Highlight.webm`; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentProjectName}_Full_Highlight.webm`; a.click();
             video.currentTime = origTime;
         };
         recorder.start(); video.play();
@@ -417,7 +465,7 @@
                 let chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
                 recorder.onstop = () => {
                     const blob = new Blob(chunks, { type: 'video/webm' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `Tory_${seg.label}_${formatTime(seg.start)}.webm`; a.click(); resolve();
+                    a.download = `${currentProjectName}_${seg.label}_${formatTime(seg.start)}.webm`; a.click(); resolve();
                 };
                 recorder.start(); video.play();
                 const checker = () => { if(video.currentTime >= seg.end) { video.pause(); recorder.stop(); video.removeEventListener('timeupdate', checker); } };
@@ -426,6 +474,7 @@
         }
     }
 
+    // JSON 데이터를 기반으로 한 자동 분석 알고리즘 (패턴 분석)
     function autoGenerateSegments() {
         if(trackData.length < 10) return alert("데이터가 부족합니다.");
         if(!confirm("기존 구간이 지워지고 재분석됩니다. 진행할까요?")) return;
