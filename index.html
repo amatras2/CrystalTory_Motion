@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.26 (Tracking Fix)</title>
+    <title>CrystalTory_Motion V5.27 (Speed & Smoothness Fixed)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -120,7 +120,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.26 🚀</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.27 ⚡</div>
     </div>
 </header> 
 
@@ -267,7 +267,6 @@
         reader.readAsText(file);
     }); 
 
-    // [핵심 변경점] 건너뛰기 시 관성 및 미아 프레임을 0으로 리셋하여 과거의 영향 차단
     function skip(amount) { 
         if(!isNaN(video.duration)) {
             video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); 
@@ -336,26 +335,37 @@
         aiStatus.innerText = "🔴 AI 분석 중"; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
 
         try {
-            const predictions = await model.detect(video); 
+            // [해결포인트 1] 다시 AI가 '확대된 캔버스'를 바라보게 원복 (초고속 스캔, 끊김 방지)
+            const predictions = await model.detect(canvas); 
             const persons = predictions.filter(p => p.class === 'person');
             let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
             
             if (person) {
                 targetLostFrames = 0; 
-                let nTX = person.bbox[0] + person.bbox[2] / 2;
-                let nTY = person.bbox[1] + person.bbox[3] / 2;
+                
+                const viewW = canvas.width / currentZoom; 
+                const viewH = canvas.height / currentZoom;
+                
+                // 캔버스 기준 좌표를 원본 비디오 좌표계로 매핑
+                let nTX = (centerX - viewW/2) + (person.bbox[0] + person.bbox[2]/2) / canvas.width * viewW;
+                let nTY = (centerY - viewH/2) + (person.bbox[1] + person.bbox[3]/2) / canvas.height * viewH;
                 
                 velocityX = (nTX - targetX) * 0.4;
                 velocityY = (nTY - targetY) * 0.4;
                 targetX = nTX; targetY = nTY;
                 
-                if(isAutoZoom) targetZoom = Math.max(1.2, Math.min(8.0, 2.5 * (video.videoHeight * 0.45 / person.bbox[3])));
+                if(isAutoZoom) {
+                    targetZoom = Math.max(1.2, Math.min(8.0, 2.5 * (canvas.height * 0.45 / person.bbox[3])));
+                }
             } else {
                 targetLostFrames++;
-                if (targetLostFrames < 45) { 
+                if (targetLostFrames < 15) { 
+                    // 잠깐 놓쳤을 땐 관성으로 따라감
                     targetX += velocityX; targetY += velocityY; 
                     velocityX *= 0.90; velocityY *= 0.90; 
-                    targetZoom += (1.5 - targetZoom) * 0.02;
+                } else {
+                    // [해결포인트 2] 프레임 아웃 방지 '스마트 폴백': 15프레임 이상 놓치면 시야를 넓혀(줌아웃) 사람을 다시 찾음
+                    targetZoom += (1.0 - targetZoom) * 0.05; 
                 }
             }
         } finally { isDetecting = false; }
@@ -485,7 +495,8 @@
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         
         if (!isDragging) {
-            const ease = aiStatus.innerText.includes("리플레이") ? 0.35 : 0.15;
+            // [해결포인트 3] AI가 쫓아가는 반응 속도(ease)를 0.15에서 0.25로 상향하여 다이내믹한 움직임 캐치
+            const ease = aiStatus.innerText.includes("리플레이") ? 0.35 : 0.25;
             centerX += (targetX - centerX) * ease; centerY += (targetY - centerY) * ease;
             currentZoom += (targetZoom - currentZoom) * 0.05; zoomRange.value = currentZoom;
         }
@@ -500,7 +511,6 @@
         if (!video.paused) {
             seekBar.value = video.currentTime;
             
-            // [핵심 변경점] 수동 드래그 중이거나 AI가 사람을 정상적으로 찾았을 때만 궤적 저장 (고스트 데이터 방지)
             let isReplay = aiStatus.innerText.includes("리플레이");
             let canSave = isDragging || (!isReplay && targetLostFrames < 5);
 
@@ -508,7 +518,6 @@
                 let curT = Math.round(video.currentTime * 10) / 10;
                 trackData = trackData.filter(d => Math.abs(d.t - curT) > 0.1);
                 trackData.push({t: curT, x: centerX, y: centerY, z: currentZoom});
-                // 건너뛰기를 해도 시간 순서대로 강제 정렬하여 튕김 현상 원천 차단
                 trackData.sort((a, b) => a.t - b.t);
             }
         }
@@ -538,7 +547,6 @@
         else { video.play(); playBtn.innerText = "Ⅱ"; requestWakeLock(); }
     } 
 
-    // [핵심 변경점] 초기화 시 엉킨 trackData를 완전히 비워버리도록 수정
     function resetCenter() { 
         if(!confirm("저장된 모든 궤적 데이터를 초기화하고 중앙으로 되돌리시겠습니까?")) return;
         targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; 
