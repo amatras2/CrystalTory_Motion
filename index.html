@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.9 (Batch & Filter)</title>
+    <title>CrystalTory_Motion V5.25 (Masterpiece Merge)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -11,31 +11,32 @@
             --tuxedo-black: #0a0a0a; --tuxedo-dark: #1a1a1a;
             --tuxedo-white: #f5f5f5; --point-silver: #a0a0a0;
             --highlight-green: #bfff00; --highlight-blue: #00d2ff; --highlight-red: #ff4757; --border: #2d2d2d;
-        }
+        } 
 
         body {
             background-color: var(--tuxedo-black); color: var(--tuxedo-white);
             font-family: 'Pretendard', sans-serif; margin: 0;
             display: flex; flex-direction: column; min-height: 100vh;
-        }
+        } 
 
         header {
             padding: 15px 25px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
             display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
-        .logo { font-size: 1.2rem; font-weight: 800; }
+        .logo { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.5px; }
         .logo span { color: var(--point-silver); font-weight: 300; }
-        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #333; color: #aaa; transition: 0.3s; font-weight: bold; }
+        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; background: #333; color: #aaa; transition: 0.3s; font-weight: bold; } 
 
-        main { display: flex; flex-direction: column; padding: 15px; gap: 15px; flex: 1; }
+        main { display: flex; flex-direction: column; padding: 15px; gap: 15px; flex: 1; } 
 
         .file-ops { display: flex; gap: 10px; }
         .file-btn { 
             flex: 1; background: #222; border: 1px solid #444; color: #ddd; 
-            padding: 10px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; transition: 0.2s;
+            padding: 12px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; transition: 0.2s; font-weight: bold;
         }
-        .file-btn:hover { background: #333; }
-        .hidden-input { display: none; }
+        .file-btn:hover { background: #2a2a2a; border-color: #555; }
+        .hidden-input { display: none; } 
 
         .player-container {
             position: relative; background: #000; border-radius: 12px;
@@ -43,94 +44,105 @@
             cursor: grab; width: 100%; transition: border-color 0.2s;
         }
         #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
+        #motionCanvas:active { cursor: grabbing; }
         
         .playback-controls { display: flex; justify-content: center; gap: 20px; align-items: center; margin-top: 5px; }
-        .skip-btn { background: #222; border: 1px solid #444; color: #ddd; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .skip-btn { background: #222; border: 1px solid #444; color: #ddd; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+        .skip-btn:hover { background: #333; } 
 
         .sliders-group {
             display: flex; flex-direction: column; gap: 12px; 
-            background: #111; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+            background: #111; padding: 12px 15px; border-radius: 8px; border: 1px solid var(--border);
         }
         .slider-row { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; color: var(--point-silver); }
         .slider-row label { min-width: 65px; font-weight: bold; }
-        input[type=range] { flex: 1; accent-color: var(--highlight-green); cursor: pointer; }
-        .val-display { min-width: 40px; text-align: right; color: var(--highlight-green); font-weight: bold; }
+        input[type=range] { flex: 1; accent-color: var(--highlight-green); cursor: pointer; outline: none; }
+        .val-display { min-width: 40px; text-align: right; color: var(--highlight-green); font-weight: bold; font-variant-numeric: tabular-nums; } 
 
-        /* V5.9 타임라인 고도화 */
+        .auto-zoom-btn { background: #333; border: 1px solid #555; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: 0.2s; }
+        .auto-zoom-btn.active { background: rgba(191, 255, 0, 0.1); color: var(--highlight-green); border-color: var(--highlight-green); }
+
+        /* V5.9 타임라인 고도화 UI 유지 */
         .timeline-editor {
             background: var(--tuxedo-dark); border-radius: 12px; border: 1px solid var(--border);
-            display: flex; flex-direction: column; min-height: 350px;
+            display: flex; flex-direction: column; min-height: 350px; overflow: hidden;
         }
-        .timeline-header { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+        .timeline-header { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; background: #1f1f1f; }
         .filter-bar { display: flex; gap: 8px; align-items: center; }
-        .filter-select { background: #222; color: white; border: 1px solid #444; padding: 5px; border-radius: 4px; font-size: 0.75rem; flex: 1; }
+        .filter-select { background: #222; color: white; border: 1px solid #444; padding: 6px; border-radius: 6px; font-size: 0.8rem; flex: 1; outline: none; font-weight: bold; }
+        .filter-select:focus { border-color: var(--highlight-blue); }
         
         .batch-ops { display: flex; gap: 8px; }
-        .batch-btn { background: #333; color: white; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; flex: 1; font-weight: bold; }
-        .batch-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .batch-btn { background: #333; color: white; border: 1px solid #555; padding: 8px 12px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; flex: 1; font-weight: bold; transition: 0.2s; }
+        .batch-btn:disabled { opacity: 0.3; cursor: not-allowed; } 
 
         .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 400px; }
         .segment-item { 
             display: flex; gap: 10px; background: #111; 
-            padding: 12px; border-radius: 8px; border: 1px solid #222; align-items: flex-start;
+            padding: 12px; border-radius: 8px; border: 1px solid #222; align-items: flex-start; transition: 0.3s;
         }
-        .seg-check { width: 20px; height: 20px; accent-color: var(--highlight-green); cursor: pointer; margin-top: 10px; }
+        .segment-item:hover { border-color: #444; background: #151515; }
+        .seg-check { width: 20px; height: 20px; accent-color: var(--highlight-green); cursor: pointer; margin-top: 10px; } 
 
         .segment-label-select { 
             background: #222; color: white; border: 1px solid #444; padding: 6px; 
-            border-radius: 4px; font-size: 0.8rem; flex: 1; font-weight: bold;
+            border-radius: 6px; font-size: 0.8rem; flex: 1; font-weight: bold; outline: none;
         }
         .segment-label-select.jump { color: var(--highlight-red); border-color: var(--highlight-red); }
-        .segment-label-select.slalom { color: var(--highlight-blue); border-color: var(--highlight-blue); }
+        .segment-label-select.slalom { color: var(--highlight-blue); border-color: var(--highlight-blue); } 
 
         .action-icon-btn {
-            background: #333; border: 1px solid #555; color: white; padding: 6px 10px; 
-            border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: bold;
+            background: #333; border: 1px solid #555; color: white; padding: 6px 12px; 
+            border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: 0.2s;
         }
-        .action-icon-btn.recording { background: var(--highlight-red); border-color: var(--highlight-red); animation: pulse 1.5s infinite; }
+        .action-icon-btn:hover { background: #444; border-color: var(--highlight-blue); color: var(--highlight-blue); }
         
         .time-ctrl { display: flex; align-items: center; gap: 5px; background: #222; padding: 4px 8px; border-radius: 6px; border: 1px solid #333;}
-        .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-weight: bold; font-size: 1rem; }
+        .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-weight: bold; font-size: 1rem; } 
 
         .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px;}
         .btn-group { display: flex; gap: 10px; }
-        .action-btn { flex: 1; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; }
-        .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); }
+        .action-btn { flex: 1; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
+        .action-btn:hover { background: #2a2a2a; }
+        .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); } 
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tuxedo-dark); }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
     </style>
 </head>
-<body>
+<body> 
 
 <header>
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
-        <span id="aiStatus" class="status-badge">🧠 대기중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.9 🐾</div>
+        <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.25 ✨</div>
     </div>
-</header>
+</header> 
 
 <main>
     <div class="file-ops">
         <label class="file-btn">🎬 1. 영상 열기<input type="file" id="videoUpload" accept="video/*" class="hidden-input"></label>
         <label class="file-btn" style="border-color: var(--highlight-blue); color: var(--highlight-blue);">📁 2. 작업 열기<input type="file" id="jsonUpload" accept=".json" class="hidden-input"></label>
-    </div>
+    </div> 
 
     <div class="player-container" id="playerContainer">
         <canvas id="motionCanvas"></canvas>
-    </div>
+    </div> 
 
     <div class="playback-controls">
         <button class="skip-btn" onclick="skip(-10)">-10초</button>
-        <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:2.2rem; cursor:pointer; width: 50px;">▶</button>
+        <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:2.2rem; cursor:pointer; width: 50px; transition: transform 0.1s;">▶</button>
         <button class="skip-btn" onclick="skip(10)">+10초</button>
     </div>
     
     <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
         <input type="range" id="seekBar" value="0" step="0.1" style="flex: 1;">
-        <span id="timeDisplay" style="font-size:0.75rem; min-width:80px; text-align:right;">00:00 / 00:00</span>
-    </div>
+        <span id="timeDisplay" style="font-size:0.75rem; min-width:80px; text-align:right; font-variant-numeric: tabular-nums;">00:00 / 00:00</span>
+    </div> 
 
     <div class="sliders-group">
         <div class="slider-row">
@@ -139,13 +151,13 @@
             <span class="val-display" id="zoomVal">2.5x</span>
             <button id="btnAutoZoom" class="auto-zoom-btn" onclick="toggleAutoZoom()">오토줌 OFF</button>
         </div>
-    </div>
+    </div> 
 
     <div class="timeline-editor">
         <div class="timeline-header">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size: 0.85rem; font-weight:bold;">🎥 스마트 분석 타임라인</span>
-                <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-green); font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 자동 분석</button>
+                <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-green); font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 패턴 자동 분석</button>
             </div>
             <div class="filter-bar">
                 <select id="tagFilter" class="filter-select" onchange="updateSegmentListUI()">
@@ -155,23 +167,23 @@
                     <option value="기본 트래킹">트래킹만</option>
                 </select>
                 <div class="batch-ops">
-                    <button class="batch-btn" id="btnBatchExtract" onclick="batchExtract()" style="color:var(--highlight-blue);">선택 추출</button>
-                    <button class="batch-btn" id="btnBatchDelete" onclick="batchDelete()" style="color:var(--highlight-red);">선택 삭제</button>
+                    <button class="batch-btn" id="btnBatchExtract" onclick="batchExtract()" style="color:var(--highlight-blue);" disabled>선택 추출 (0)</button>
+                    <button class="batch-btn" id="btnBatchDelete" onclick="batchDelete()" style="color:var(--highlight-red);" disabled>선택 삭제 (0)</button>
                 </div>
             </div>
         </div>
         <div class="segment-list" id="segmentList"></div>
-    </div>
+    </div> 
 
     <div class="control-panel">
         <div class="btn-group">
-            <button class="action-btn" onclick="resetCenter()">🎯 중앙 초기화</button>
+            <button class="action-btn" onclick="resetCenter()">🎯 트래킹 초기화</button>
             <button class="action-btn btn-primary" onclick="exportData()">💾 전체 데이터 저장</button>
         </div>
     </div>
-</main>
+</main> 
 
-<video id="hiddenVideo" style="display:none;" playsinline muted></video>
+<video id="hiddenVideo" style="display:none;" playsinline muted></video> 
 
 <script>
     const video = document.getElementById('hiddenVideo');
@@ -187,23 +199,31 @@
     const aiStatus = document.getElementById('aiStatus');
     const wakeLockStatus = document.getElementById('wakeLockStatus');
     const segmentListUI = document.getElementById('segmentList');
-    const tagFilter = document.getElementById('tagFilter');
+    const tagFilter = document.getElementById('tagFilter'); 
 
     let currentZoom = 2.5; let targetZoom = 2.5;  
     let isAutoZoom = false; let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
     let velocityX = 0; let velocityY = 0;
-    let isDragging = false; let lastMouseX = 0; let lastMouseY = 0;
+    let isDragging = false; let lastMouseX = 0; let lastMouseY = 0; 
 
     let trackData = []; let segments = [];
     let model = null; let isDetecting = false; let targetLostFrames = 0; 
-    let wakeLock = null;
+    let wakeLock = null; 
 
-    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈'];
+    // 웨이크보드 태그 적용
+    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈']; 
 
-    cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비 완료"; aiStatus.style.color = "var(--highlight-green)"; });
+    cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비 완료"; aiStatus.style.color = "var(--highlight-green)"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; }); 
 
-    // V5.9 화면 꺼짐 방지 로직
+    window.addEventListener('keydown', (e) => { 
+        if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if(e.code === 'Space') { e.preventDefault(); togglePlay(); playBtn.style.transform = "scale(0.9)"; setTimeout(()=>playBtn.style.transform="scale(1)", 100); }
+        if(e.code === 'ArrowRight') { e.preventDefault(); skip(10); }
+        if(e.code === 'ArrowLeft') { e.preventDefault(); skip(-10); }
+    });
+
+    // 화면 꺼짐 방지 로직 (V5.9)
     async function requestWakeLock() {
         try {
             if ('wakeLock' in navigator) {
@@ -212,7 +232,7 @@
                 wakeLockStatus.title = "화면 유지 중";
             }
         } catch (err) { console.error(`${err.name}, ${err.message}`); }
-    }
+    } 
 
     function releaseWakeLock() {
         if (wakeLock !== null) {
@@ -220,7 +240,7 @@
             wakeLockStatus.innerText = "🚫";
             wakeLockStatus.title = "화면 유지 꺼짐";
         }
-    }
+    } 
 
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -233,7 +253,7 @@
                 trackData = []; render();
             };
         }
-    });
+    }); 
 
     jsonUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -244,28 +264,32 @@
                 const data = JSON.parse(event.target.result);
                 if (data.segments) { segments = data.segments.map(s => ({...s, selected: false})); updateSegmentListUI(); }
                 if (data.trackData) { trackData = data.trackData; }
-                alert("✅ 데이터를 불러왔습니다!");
-            } catch(err) { alert("❌ 오류 발생"); }
+                alert("✅ 데이터를 성공적으로 불러왔습니다!");
+            } catch(err) { alert("❌ JSON 파싱 오류가 발생했습니다."); }
         };
         reader.readAsText(file);
-    });
+    }); 
 
-    function skip(amount) { if(!isNaN(video.duration)) video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); }
+    function skip(amount) { if(!isNaN(video.duration)) video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); } 
 
     function toggleAutoZoom() {
         isAutoZoom = !isAutoZoom;
         const btn = document.getElementById('btnAutoZoom');
         isAutoZoom ? (btn.classList.add('active'), btn.innerText = "✨ 오토줌 ON") : (btn.classList.remove('active'), btn.innerText = "오토줌 OFF");
-    }
+    } 
 
     zoomRange.addEventListener('input', (e) => { 
         if(isAutoZoom) toggleAutoZoom(); 
         targetZoom = parseFloat(e.target.value); currentZoom = targetZoom;
         zoomVal.innerText = targetZoom.toFixed(1) + 'x'; 
-    });
+    }); 
 
-    // 드래그 및 관성 추적 로직 (V5.8 유지)
+    // 드래그 및 관성 제어 로직
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
+    playerContainer.addEventListener('touchstart', (e) => { startDrag(e.touches[0]); }, {passive:false}); 
+    playerContainer.addEventListener('touchmove', (e) => { e.preventDefault(); drag(e.touches[0]); }, {passive:false}); 
+    playerContainer.addEventListener('touchend', endDrag);
+
     function startDrag(e) { isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; velocityX = 0; velocityY = 0; }
     function drag(e) {
         if (!isDragging) return;
@@ -275,36 +299,74 @@
         targetX = centerX; targetY = centerY;
         lastMouseX = e.clientX; lastMouseY = e.clientY;
     }
-    function endDrag() { isDragging = false; }
+    function endDrag() { isDragging = false; } 
+
+    // [핵심 병합] 리플레이 최적화 + V5.24 원본 영상(video) 트래킹 로직 도입
+    function getStoredTrack(time) {
+        if (trackData.length === 0) return null; 
+        let prev = null, next = null;
+        for(let i=0; i<trackData.length; i++) {
+            if(trackData[i].t <= time) prev = trackData[i];
+            if(trackData[i].t > time) { next = trackData[i]; break; }
+        } 
+        if (prev && next && (next.t - prev.t <= 0.5)) {
+            const ratio = (time - prev.t) / (next.t - prev.t);
+            return {
+                x: parseFloat(prev.x) + (parseFloat(next.x) - parseFloat(prev.x)) * ratio,
+                y: parseFloat(prev.y) + (parseFloat(next.y) - parseFloat(prev.y)) * ratio,
+                z: parseFloat(prev.z) + (parseFloat(next.z) - parseFloat(prev.z)) * ratio
+            };
+        }
+        return null;
+    }
 
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
+
+        // 저장된 궤적이 있으면 AI 연산 생략 (퍼포먼스 향상)
+        const stored = getStoredTrack(video.currentTime);
+        if (stored) {
+            targetX = stored.x; targetY = stored.y; targetZoom = stored.z;
+            aiStatus.innerText = "📺 리플레이 모드"; aiStatus.style.background = "var(--highlight-blue)"; aiStatus.style.color = "black";
+            return;
+        }
+
         isDetecting = true;
+        aiStatus.innerText = "🔴 AI 분석 중"; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
+
         try {
-            const predictions = await model.detect(canvas); 
+            // 캔버스가 아닌 '원본 영상(video)'을 스캔하여 프레임 아웃 해결
+            const predictions = await model.detect(video); 
             const persons = predictions.filter(p => p.class === 'person');
             let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
             
             if (person) {
                 targetLostFrames = 0; 
-                const bx = person.bbox[0] + person.bbox[2]/2; const by = person.bbox[1] + person.bbox[3]/2;
-                const viewW = canvas.width / currentZoom; const viewH = canvas.height / currentZoom;
-                let nTX = (centerX - viewW/2) + (bx / canvas.width) * viewW;
-                let nTY = (centerY - viewH/2) + (by / canvas.height) * viewH;
-                velocityX = (nTX - targetX) * 0.4; velocityY = (nTY - targetY) * 0.4;
+                let nTX = person.bbox[0] + person.bbox[2] / 2;
+                let nTY = person.bbox[1] + person.bbox[3] / 2;
+                
+                velocityX = (nTX - targetX) * 0.4;
+                velocityY = (nTY - targetY) * 0.4;
                 targetX = nTX; targetY = nTY;
+                
+                if(isAutoZoom) targetZoom = Math.max(1.2, Math.min(8.0, 2.5 * (video.videoHeight * 0.45 / person.bbox[3])));
             } else {
                 targetLostFrames++;
-                if (targetLostFrames < 45) { targetX += velocityX; targetY += velocityY; velocityX *= 0.95; velocityY *= 0.95; }
+                // 피사체를 놓쳐도 부드럽게 감속하며 시야 확보
+                if (targetLostFrames < 45) { 
+                    targetX += velocityX; targetY += velocityY; 
+                    velocityX *= 0.90; velocityY *= 0.90; 
+                    targetZoom += (1.5 - targetZoom) * 0.02;
+                }
             }
         } finally { isDetecting = false; }
-    }
+    } 
 
     function updateSegmentListUI() {
         const filter = tagFilter.value;
         segmentListUI.innerHTML = '';
         segments.forEach(seg => {
-            if (filter !== '전체' && seg.label !== filter) return;
+            if (filter !== '전체' && seg.label !== filter) return; 
 
             const item = document.createElement('div');
             item.className = 'segment-item';
@@ -313,51 +375,57 @@
                 <input type="checkbox" class="seg-check" ${seg.selected ? 'checked' : ''} onchange="toggleSelect(${seg.id})">
                 <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this)">
+                        <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this.value)">
                             ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
                         </select>
-                        <button class="action-icon-btn" onclick="playSegment(${seg.id})">▶</button>
+                        <button class="action-icon-btn" onclick="playSegment(${seg.id})">▶ 재생</button>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem;">${formatTime(seg.start)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', 0.5)">+</button></div>
+                        <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem; min-width: 40px; text-align: center;">${formatTime(seg.start)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', 0.5)">+</button></div>
                         <span style="color:#444;">~</span>
-                        <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem;">${formatTime(seg.end)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', 0.5)">+</button></div>
+                        <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem; min-width: 40px; text-align: center;">${formatTime(seg.end)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', 0.5)">+</button></div>
                     </div>
                 </div>
             `;
             segmentListUI.appendChild(item);
         });
         updateBatchButtons();
-    }
+    } 
 
     function toggleSelect(id) { const s = segments.find(i => i.id === id); if(s) s.selected = !s.selected; updateBatchButtons(); }
+    function updateSegmentLabel(id, val) { const s = segments.find(i => i.id === id); if(s) s.label = val; updateSegmentListUI(); }
+    
     function updateBatchButtons() {
         const count = segments.filter(s => s.selected).length;
-        document.getElementById('btnBatchExtract').innerText = `선택 추출 (${count})`;
-        document.getElementById('btnBatchDelete').innerText = `선택 삭제 (${count})`;
-        document.getElementById('btnBatchExtract').disabled = count === 0;
-        document.getElementById('btnBatchDelete').disabled = count === 0;
-    }
+        const btnExtract = document.getElementById('btnBatchExtract');
+        const btnDelete = document.getElementById('btnBatchDelete');
+        btnExtract.innerText = `선택 추출 (${count})`; btnDelete.innerText = `선택 삭제 (${count})`;
+        btnExtract.disabled = count === 0; btnDelete.disabled = count === 0;
+    } 
 
     function batchDelete() {
         if(!confirm("선택한 구간을 모두 삭제할까요?")) return;
         segments = segments.filter(s => !s.selected);
         updateSegmentListUI();
-    }
+    } 
 
+    // V5.9의 안정적인 순차 추출 로직
     async function batchExtract() {
         const selectedSegs = segments.filter(s => s.selected);
         if(selectedSegs.length === 0) return;
-        alert(`${selectedSegs.length}개의 구간을 순차적으로 추출합니다. 브라우저 팝업을 허용해주세요.`);
+        alert(`${selectedSegs.length}개의 구간을 순차적으로 추출합니다. 영상이 끝날 때까지 브라우저를 유지해주세요.`);
         
         for(let seg of selectedSegs) {
             await extractSegment(seg);
         }
-    }
+        alert("✅ 모든 선택 구간의 추출이 완료되었습니다!");
+    } 
 
     async function extractSegment(seg) {
         return new Promise(async (resolve) => {
             aiStatus.innerText = `🔴 추출 중: ${seg.label}`;
+            aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
+            
             video.currentTime = seg.start;
             await new Promise(r => video.addEventListener('seeked', r, {once: true}));
             
@@ -376,14 +444,15 @@
                 if(video.currentTime >= seg.end) {
                     video.pause(); recorder.stop();
                     video.removeEventListener('timeupdate', checker);
+                    aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
                 }
             };
             video.addEventListener('timeupdate', checker);
         });
-    }
+    } 
 
     function autoGenerateSegments() {
-        if (trackData.length < 50) return alert("데이터 부족");
+        if (trackData.length < 30) return alert("데이터가 부족합니다. 영상을 더 재생하여 궤적을 수집해주세요.");
         let temp = []; let windowSize = 3; let lastT = parseFloat(trackData[trackData.length-1].t);
         const w = video.videoWidth; const h = video.videoHeight;
         for (let sT = 0; sT < lastT; sT += windowSize) {
@@ -397,48 +466,87 @@
         }
         segments = temp.map((m, idx) => ({ id: Date.now() + idx, ...m }));
         updateSegmentListUI();
-    }
+    } 
 
     function adjustTime(id, f, d) {
         const s = segments.find(i => i.id === id); if(!s) return;
         s[f] = Math.max(0, s[f] + d); updateSegmentListUI();
-    }
+    } 
 
     function playSegment(id) {
         const s = segments.find(i => i.id === id); if(!s) return;
         video.currentTime = s.start; video.play(); togglePlay(true);
         const checker = () => { if(video.currentTime >= s.end) { video.pause(); togglePlay(false); video.removeEventListener('timeupdate', checker); } };
         video.addEventListener('timeupdate', checker);
-    }
+    } 
 
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
         if (!video.paused && !isDragging) detectPerson();
+
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        
+        // Easing (부드러운 전환)
         if (!isDragging) {
-            centerX += (targetX - centerX) * 0.15; centerY += (targetY - centerY) * 0.15;
+            const ease = aiStatus.innerText.includes("리플레이") ? 0.35 : 0.15;
+            centerX += (targetX - centerX) * ease; centerY += (targetY - centerY) * ease;
             currentZoom += (targetZoom - currentZoom) * 0.05; zoomRange.value = currentZoom;
         }
+        
         const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
         centerX = Math.max(vW / 2, Math.min(canvas.width - vW / 2, centerX));
         centerY = Math.max(vH / 2, Math.min(canvas.height - vH / 2, centerY));
+        
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
+        
+        // V5.24 카메라 포커스 UI 통합
+        drawFocusBracket();
+
         if (!video.paused) {
             seekBar.value = video.currentTime;
-            if (Math.floor(video.currentTime * 10) % 2 === 0) trackData.push({t: video.currentTime, x: centerX, y: centerY, z: currentZoom});
+            // 궤적 데이터 저장 (초당 5프레임 정도)
+            if (Math.floor(video.currentTime * 10) % 2 === 0) {
+                trackData = trackData.filter(d => Math.abs(d.t - video.currentTime) > 0.1);
+                trackData.push({t: Math.round(video.currentTime * 10)/10, x: centerX, y: centerY, z: currentZoom});
+            }
         }
         document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
         requestAnimationFrame(render);
+    } 
+
+    function drawFocusBracket() {
+        const cx = canvas.width / 2; const cy = canvas.height / 2;
+        const size = 40; const padding = 20; 
+        
+        ctx.strokeStyle = isDragging ? 'rgba(191, 255, 0, 0.8)' : 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(cx - padding, cy - padding - size); ctx.lineTo(cx - padding - size, cy - padding - size); ctx.lineTo(cx - padding - size, cy - padding);
+        ctx.moveTo(cx + padding, cy - padding - size); ctx.lineTo(cx + padding + size, cy - padding - size); ctx.lineTo(cx + padding + size, cy - padding);
+        ctx.moveTo(cx - padding, cy + padding + size); ctx.lineTo(cx - padding - size, cy + padding + size); ctx.lineTo(cx - padding - size, cy + padding);
+        ctx.moveTo(cx + padding, cy + padding + size); ctx.lineTo(cx + padding + size, cy + padding + size); ctx.lineTo(cx + padding + size, cy + padding);
+        ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy); ctx.moveTo(cx, cy - 5); ctx.lineTo(cx, cy + 5);
+        ctx.stroke();
     }
 
     function togglePlay(forcePlay) {
         const isPlaying = forcePlay !== undefined ? !forcePlay : !video.paused;
         if (isPlaying) { video.pause(); playBtn.innerText = "▶"; releaseWakeLock(); }
         else { video.play(); playBtn.innerText = "Ⅱ"; requestWakeLock(); }
-    }
+    } 
 
     function resetCenter() { targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; targetZoom = 2.5; }
     function formatTime(s) { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return m.toString().padStart(2, '0') + ":" + sec.toString().padStart(2, '0'); }
+    
+    function exportData() {
+        const data = { trackData, segments }; 
+        const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); 
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
+        a.download = `Tory_MotionData.json`; 
+        a.click(); 
+    }
+
     seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
 </script>
 </body>
