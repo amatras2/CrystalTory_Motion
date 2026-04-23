@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.25 (Masterpiece Merge)</title>
+    <title>CrystalTory_Motion V5.26 (Tracking Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -62,7 +62,6 @@
         .auto-zoom-btn { background: #333; border: 1px solid #555; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: 0.2s; }
         .auto-zoom-btn.active { background: rgba(191, 255, 0, 0.1); color: var(--highlight-green); border-color: var(--highlight-green); }
 
-        /* V5.9 타임라인 고도화 UI 유지 */
         .timeline-editor {
             background: var(--tuxedo-dark); border-radius: 12px; border: 1px solid var(--border);
             display: flex; flex-direction: column; min-height: 350px; overflow: hidden;
@@ -104,6 +103,8 @@
         .btn-group { display: flex; gap: 10px; }
         .action-btn { flex: 1; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
         .action-btn:hover { background: #2a2a2a; }
+        .action-btn.btn-danger { color: var(--highlight-red); border-color: #552222; }
+        .action-btn.btn-danger:hover { background: #331111; }
         .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); } 
 
         ::-webkit-scrollbar { width: 6px; }
@@ -119,7 +120,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.25 ✨</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.26 🚀</div>
     </div>
 </header> 
 
@@ -177,7 +178,7 @@
 
     <div class="control-panel">
         <div class="btn-group">
-            <button class="action-btn" onclick="resetCenter()">🎯 트래킹 초기화</button>
+            <button class="action-btn btn-danger" onclick="resetCenter()">🧹 궤적 초기화</button>
             <button class="action-btn btn-primary" onclick="exportData()">💾 전체 데이터 저장</button>
         </div>
     </div>
@@ -211,7 +212,6 @@
     let model = null; let isDetecting = false; let targetLostFrames = 0; 
     let wakeLock = null; 
 
-    // 웨이크보드 태그 적용
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈']; 
 
     cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비 완료"; aiStatus.style.color = "var(--highlight-green)"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; }); 
@@ -223,13 +223,11 @@
         if(e.code === 'ArrowLeft') { e.preventDefault(); skip(-10); }
     });
 
-    // 화면 꺼짐 방지 로직 (V5.9)
     async function requestWakeLock() {
         try {
             if ('wakeLock' in navigator) {
                 wakeLock = await navigator.wakeLock.request('screen');
-                wakeLockStatus.innerText = "💡";
-                wakeLockStatus.title = "화면 유지 중";
+                wakeLockStatus.innerText = "💡"; wakeLockStatus.title = "화면 유지 중";
             }
         } catch (err) { console.error(`${err.name}, ${err.message}`); }
     } 
@@ -237,8 +235,7 @@
     function releaseWakeLock() {
         if (wakeLock !== null) {
             wakeLock.release(); wakeLock = null;
-            wakeLockStatus.innerText = "🚫";
-            wakeLockStatus.title = "화면 유지 꺼짐";
+            wakeLockStatus.innerText = "🚫"; wakeLockStatus.title = "화면 유지 꺼짐";
         }
     } 
 
@@ -270,7 +267,14 @@
         reader.readAsText(file);
     }); 
 
-    function skip(amount) { if(!isNaN(video.duration)) video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); } 
+    // [핵심 변경점] 건너뛰기 시 관성 및 미아 프레임을 0으로 리셋하여 과거의 영향 차단
+    function skip(amount) { 
+        if(!isNaN(video.duration)) {
+            video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); 
+            velocityX = 0; velocityY = 0;
+            targetLostFrames = 0;
+        }
+    } 
 
     function toggleAutoZoom() {
         isAutoZoom = !isAutoZoom;
@@ -284,7 +288,6 @@
         zoomVal.innerText = targetZoom.toFixed(1) + 'x'; 
     }); 
 
-    // 드래그 및 관성 제어 로직
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
     playerContainer.addEventListener('touchstart', (e) => { startDrag(e.touches[0]); }, {passive:false}); 
     playerContainer.addEventListener('touchmove', (e) => { e.preventDefault(); drag(e.touches[0]); }, {passive:false}); 
@@ -301,7 +304,6 @@
     }
     function endDrag() { isDragging = false; } 
 
-    // [핵심 병합] 리플레이 최적화 + V5.24 원본 영상(video) 트래킹 로직 도입
     function getStoredTrack(time) {
         if (trackData.length === 0) return null; 
         let prev = null, next = null;
@@ -323,7 +325,6 @@
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
 
-        // 저장된 궤적이 있으면 AI 연산 생략 (퍼포먼스 향상)
         const stored = getStoredTrack(video.currentTime);
         if (stored) {
             targetX = stored.x; targetY = stored.y; targetZoom = stored.z;
@@ -335,7 +336,6 @@
         aiStatus.innerText = "🔴 AI 분석 중"; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
 
         try {
-            // 캔버스가 아닌 '원본 영상(video)'을 스캔하여 프레임 아웃 해결
             const predictions = await model.detect(video); 
             const persons = predictions.filter(p => p.class === 'person');
             let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
@@ -352,7 +352,6 @@
                 if(isAutoZoom) targetZoom = Math.max(1.2, Math.min(8.0, 2.5 * (video.videoHeight * 0.45 / person.bbox[3])));
             } else {
                 targetLostFrames++;
-                // 피사체를 놓쳐도 부드럽게 감속하며 시야 확보
                 if (targetLostFrames < 45) { 
                     targetX += velocityX; targetY += velocityY; 
                     velocityX *= 0.90; velocityY *= 0.90; 
@@ -409,7 +408,6 @@
         updateSegmentListUI();
     } 
 
-    // V5.9의 안정적인 순차 추출 로직
     async function batchExtract() {
         const selectedSegs = segments.filter(s => s.selected);
         if(selectedSegs.length === 0) return;
@@ -486,7 +484,6 @@
 
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         
-        // Easing (부드러운 전환)
         if (!isDragging) {
             const ease = aiStatus.innerText.includes("리플레이") ? 0.35 : 0.15;
             centerX += (targetX - centerX) * ease; centerY += (targetY - centerY) * ease;
@@ -498,16 +495,21 @@
         centerY = Math.max(vH / 2, Math.min(canvas.height - vH / 2, centerY));
         
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
-        
-        // V5.24 카메라 포커스 UI 통합
         drawFocusBracket();
 
         if (!video.paused) {
             seekBar.value = video.currentTime;
-            // 궤적 데이터 저장 (초당 5프레임 정도)
-            if (Math.floor(video.currentTime * 10) % 2 === 0) {
-                trackData = trackData.filter(d => Math.abs(d.t - video.currentTime) > 0.1);
-                trackData.push({t: Math.round(video.currentTime * 10)/10, x: centerX, y: centerY, z: currentZoom});
+            
+            // [핵심 변경점] 수동 드래그 중이거나 AI가 사람을 정상적으로 찾았을 때만 궤적 저장 (고스트 데이터 방지)
+            let isReplay = aiStatus.innerText.includes("리플레이");
+            let canSave = isDragging || (!isReplay && targetLostFrames < 5);
+
+            if (canSave && Math.floor(video.currentTime * 10) % 2 === 0) {
+                let curT = Math.round(video.currentTime * 10) / 10;
+                trackData = trackData.filter(d => Math.abs(d.t - curT) > 0.1);
+                trackData.push({t: curT, x: centerX, y: centerY, z: currentZoom});
+                // 건너뛰기를 해도 시간 순서대로 강제 정렬하여 튕김 현상 원천 차단
+                trackData.sort((a, b) => a.t - b.t);
             }
         }
         document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
@@ -536,7 +538,14 @@
         else { video.play(); playBtn.innerText = "Ⅱ"; requestWakeLock(); }
     } 
 
-    function resetCenter() { targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; targetZoom = 2.5; }
+    // [핵심 변경점] 초기화 시 엉킨 trackData를 완전히 비워버리도록 수정
+    function resetCenter() { 
+        if(!confirm("저장된 모든 궤적 데이터를 초기화하고 중앙으로 되돌리시겠습니까?")) return;
+        targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; 
+        targetZoom = 2.5; trackData = []; 
+        alert("🧹 궤적이 말끔하게 초기화되었습니다. 다시 재생하여 기록해보세요.");
+    }
+    
     function formatTime(s) { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return m.toString().padStart(2, '0') + ":" + sec.toString().padStart(2, '0'); }
     
     function exportData() {
