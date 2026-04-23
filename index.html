@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -184,7 +185,6 @@
     canvas.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', doDrag); window.addEventListener('mouseup', () => isDragging=false);
     canvas.addEventListener('touchstart', startDrag, {passive:false}); canvas.addEventListener('touchmove', (e) => { e.preventDefault(); doDrag(e); }, {passive:false}); canvas.addEventListener('touchend', () => isDragging=false);
 
-    // [V5.22 핵심 수정] 데이터 보간법 (Interpolation) 및 모드 깜빡임 방지 로직
     function getStoredTrack(time) {
         if (trackData.length === 0) return null;
 
@@ -194,7 +194,6 @@
             if(trackData[i].t > time) { next = trackData[i]; break; }
         }
 
-        // 1. 앞뒤 데이터가 모두 있고, 그 간격이 0.5초 이하일 경우 -> 미세 빈공간(Micro-gap)이므로 부드럽게 이음(보간)
         if (prev && next) {
             const gap = next.t - prev.t;
             if (gap <= 0.5) {
@@ -207,11 +206,9 @@
             }
         }
         
-        // 2. 정확히 매칭되거나 아주 가까운 데이터가 있을 경우
         if (prev && (time - prev.t < 0.2)) return prev;
         if (next && (next.t - time < 0.2)) return next;
 
-        // 3. 0.5초 이상 비어있다면 진짜 데이터가 없는 구간이므로 AI 레코딩 모드로 전환
         return null;
     }
 
@@ -257,7 +254,6 @@
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         
         if (!isDragging) {
-            // 리플레이 모드일 때는 보간된 데이터에 맞춰 아주 부드럽게(0.35) 쫓아감
             const ease = (modeStatus.innerText.includes("리플레이")) ? 0.35 : 0.25;
             centerX += (targetX - centerX) * ease; 
             centerY += (targetY - centerY) * ease;
@@ -345,7 +341,6 @@
             const data = JSON.parse(ev.target.result);
             trackData = data.trackData || []; segments = data.segments || [];
             
-            // 데이터 무결성 체크 (이전 버전 데이터 변환)
             trackData = trackData.filter(d => d.t !== null && d.x !== null);
             
             updateSegmentListUI(); autoSaveToLocal();
