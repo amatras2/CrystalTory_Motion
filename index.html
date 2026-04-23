@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.17 (Wipeout Edition)</title>
+    <title>CrystalTory_Motion V5.19 (Wide-Eye Tracking)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -28,7 +28,7 @@
         header { padding: 10px 15px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .logo { font-size: 1rem; font-weight: 800; }
         .logo span { color: var(--point-silver); font-weight: 300; }
-        .status-badge { font-size: 0.65rem; padding: 3px 6px; border-radius: 4px; background: #333; color: #aaa; font-weight: bold; }
+        .status-badge { font-size: 0.65rem; padding: 3px 6px; border-radius: 4px; background: #333; color: #aaa; font-weight: bold; transition: 0.3s; }
 
         .player-container { position: relative; background: #000; width: 100%; aspect-ratio: 16 / 9; max-height: 40vh; margin: 0 auto; overflow: hidden; }
         #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
@@ -53,9 +53,9 @@
 
         .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
         .segment-item { background: #111; padding: 12px; border-radius: 8px; border: 1px solid #222; display: flex; flex-direction: column; gap: 8px; transition: 0.3s; }
-        .segment-item.active { border-color: var(--highlight-green); background: #1a221a; transform: scale(1.01); }
+        .segment-item.active { border-color: var(--highlight-green); background: #1a221a; transform: scale(1.01); box-shadow: 0 0 10px rgba(191, 255, 0, 0.1); }
 
-        .seg-row { display: flex; gap: 10px; align-items: center; }
+        .seg-row { display: flex; gap: 8px; align-items: center; }
         .seg-select { background: #222; color: white; border: 1px solid #444; padding: 6px; border-radius: 4px; flex: 1; font-size: 0.8rem; font-weight: bold; }
         
         .time-ctrl { display: flex; align-items: center; gap: 8px; background: #222; padding: 4px 10px; border-radius: 6px; }
@@ -117,7 +117,7 @@
     </div>
 
     <div class="btn-row" style="margin-top:10px;">
-        <button class="action-btn" onclick="resetCenter()">🎯 트래킹 초기화</button>
+        <button class="action-btn" onclick="resetCenter()">🎯 전체 트래킹 초기화</button>
         <button class="action-btn btn-success" onclick="exportData()">💾 JSON 저장</button>
     </div>
 </div>
@@ -140,6 +140,7 @@
     let isAutoZoom = false; let showAIIndicator = true;
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
+    let velocityX = 0; let velocityY = 0;
     let isDragging = false; let lastMouseX = 0; let lastMouseY = 0;
 
     let trackData = []; let segments = [];
@@ -149,12 +150,10 @@
     let renderStarted = false;
     let isSegDragging = false; 
 
-    // [V5.17] 낙수 태그 추가
     const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '낙수', '대기/이탈'];
 
     cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 준비"; aiStatus.style.color = "var(--highlight-green)"; });
 
-    // [V5.17] 단축키 강화: 스페이스바(재생), 방향키(10초 이동)
     window.addEventListener('keydown', (e) => { 
         if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
         if(e.code === 'Space') { e.preventDefault(); togglePlay(); }
@@ -182,23 +181,40 @@
 
     async function detectPerson() {
         if (!model || video.paused || isDetecting || isDragging) return;
+        
         const stored = getStoredTrack(video.currentTime);
         if (stored) {
             targetX = stored.x; targetY = stored.y; targetZoom = stored.z;
-            modeStatus.innerText = "📺 리플레이"; modeStatus.style.background = "var(--highlight-blue)";
+            if(!isDragging) { modeStatus.innerText = "📺 리플레이"; modeStatus.style.background = "var(--highlight-blue)"; modeStatus.style.color = "black"; }
             detectedBBox = null; return;
         }
 
-        isDetecting = true; modeStatus.innerText = "🔴 레코딩"; modeStatus.style.background = "var(--highlight-red)";
+        isDetecting = true; 
+        if(!isDragging) { modeStatus.innerText = "🔴 레코딩"; modeStatus.style.background = "var(--highlight-red)"; modeStatus.style.color = "white"; }
+        
         try {
-            const predictions = await model.detect(canvas); 
-            const person = predictions.find(p => p.class === 'person');
+            // [V5.19 🚨 핵심수정] canvas가 아닌 'video(원본 전체)'를 AI에게 통째로 넘겨줍니다!
+            // 이렇게 하면 카메라가 줌인되어 있어도, 보이지 않는 곳에 있는 사람을 다 찾아냅니다.
+            const predictions = await model.detect(video); 
+            const persons = predictions.filter(p => p.class === 'person');
+            let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
+            
             if (person) {
-                detectedBBox = person.bbox;
-                const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
-                targetX = (centerX - vW/2) + (person.bbox[0] + person.bbox[2]/2) / canvas.width * vW;
-                targetY = (centerY - vH/2) + (person.bbox[1] + person.bbox[3]/2) / canvas.height * vH;
-                if(isAutoZoom) targetZoom = Math.max(1.2, Math.min(8.0, currentZoom * (canvas.height * 0.45 / person.bbox[3])));
+                // 원본 해상도 기준의 완벽한 절대 좌표 획득
+                detectedBBox = person.bbox; 
+                let nTX = person.bbox[0] + person.bbox[2] / 2;
+                let nTY = person.bbox[1] + person.bbox[3] / 2;
+                
+                // 관성 엔진에 적용
+                velocityX = (nTX - targetX) * 0.4;
+                velocityY = (nTY - targetY) * 0.4;
+                targetX = nTX; targetY = nTY;
+                
+                if(isAutoZoom) targetZoom = Math.max(1.2, Math.min(8.0, currentZoom * (video.videoHeight * 0.45 / person.bbox[3])));
+            } else {
+                // 타겟을 아주 잠깐 놓쳤을 때의 관성 부드러운 이동
+                targetX += velocityX; targetY += velocityY;
+                velocityX *= 0.90; velocityY *= 0.90;
             }
         } finally { isDetecting = false; }
     }
@@ -208,8 +224,11 @@
         if (!video.paused && !isDragging) detectPerson();
 
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        
         if (!isDragging) {
-            centerX += (targetX - centerX) * 0.15; centerY += (targetY - centerY) * 0.15;
+            // 점프처럼 빠른 움직임을 따라가기 위해 카메라 이동 속도(0.15 -> 0.25)를 조금 더 민첩하게 수정했습니다.
+            centerX += (targetX - centerX) * 0.25; 
+            centerY += (targetY - centerY) * 0.25;
             currentZoom += (targetZoom - currentZoom) * 0.1;
         }
 
@@ -218,18 +237,26 @@
         centerY = Math.max(vH / 2, Math.min(canvas.height - vH / 2, centerY));
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
 
-        if (showAIIndicator && detectedBBox) {
+        // [V5.19 🚨 핵심수정] 좌표 변환 - 원본 영상 기준 BBox를 캔버스 배율에 맞게 다시 그려줍니다.
+        if (showAIIndicator && detectedBBox && !isDragging) {
             const sX = canvas.width / vW; const sY = canvas.height / vH;
+            const drawX = (detectedBBox[0] - (centerX - vW/2)) * sX;
+            const drawY = (detectedBBox[1] - (centerY - vH/2)) * sY;
+            const drawW = detectedBBox[2] * sX; const drawH = detectedBBox[3] * sY;
+
             ctx.strokeStyle = "var(--highlight-blue)"; ctx.lineWidth = 4;
-            ctx.strokeRect((detectedBBox[0]-(centerX-vW/2))*sX, (detectedBBox[1]-(centerY-vH/2))*sY, detectedBBox[2]*sX, detectedBBox[3]*sY);
+            ctx.strokeRect(drawX, drawY, drawW, drawH);
         }
 
         if (!video.paused) {
             const cur = video.currentTime; seekBar.value = cur;
-            if (modeStatus.innerText === "🔴 레코딩" && Math.floor(cur * 10) % 2 === 0) {
+            if (isDragging) { modeStatus.innerText = "✋ 수동 보정"; modeStatus.style.background = "var(--highlight-green)"; modeStatus.style.color = "black"; }
+
+            if ((modeStatus.innerText === "🔴 레코딩" || isDragging) && Math.floor(cur * 10) % 2 === 0) {
                 trackData = trackData.filter(d => Math.abs(d.t - cur) > 0.1);
                 trackData.push({ t: Math.round(cur * 10) / 10, x: centerX, y: centerY, z: currentZoom });
             }
+
             updateActiveSegment(cur);
             if (!isSegDragging) {
                 document.querySelectorAll('.seg-seekbar').forEach(bar => {
@@ -259,6 +286,7 @@
                 seekBar.max = video.duration; 
                 centerX = video.videoWidth/2; centerY = video.videoHeight/2;
                 targetX = centerX; targetY = centerY;
+                trackData = []; // 새 비디오면 데이터 완전 초기화
                 segments = [{ id: Date.now(), start: 0, end: Math.floor(video.duration), label: '기본 트래킹', selected: false }];
                 updateSegmentListUI();
                 if(!renderStarted) { renderStarted = true; render(); }
@@ -290,8 +318,9 @@
                     <select class="seg-select" onchange="updateLabel(${seg.id}, this.value)">
                         ${MOTION_TAGS.map(t => `<option value="${t}" ${seg.label===t?'selected':''}>${t}</option>`).join('')}
                     </select>
-                    <button class="action-btn" style="padding:5px 10px; background:#444;" onclick="splitSegment(${seg.id})">✂ 분할</button>
-                    <button class="action-btn" style="padding:5px 10px;" onclick="playSegment(${seg.id})">▶ 재생</button>
+                    <button class="action-btn" style="padding:6px; background:#444;" onclick="splitSegment(${seg.id})" title="분할">✂</button>
+                    <button class="action-btn" style="padding:6px; background:var(--highlight-red); color:white; border:none;" onclick="clearSegmentTrack(${seg.id})" title="해당 구간 궤적 데이터 삭제">🧹 궤적 리셋</button>
+                    <button class="action-btn" style="padding:6px;" onclick="playSegment(${seg.id})">▶</button>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id},'start',-0.5)">-</button><span style="font-size:0.75rem; color:var(--highlight-green); min-width:40px; text-align:center;">${formatTime(seg.start)}</span><button class="time-btn" onclick="adjustTime(${seg.id},'start',0.5)">+</button></div>
@@ -304,6 +333,13 @@
             `;
             segmentListUI.appendChild(item);
         });
+    }
+
+    function clearSegmentTrack(id) {
+        const s = segments.find(i=>i.id===id); if(!s) return;
+        if(!confirm("이 구간의 궤적을 지울까요? 지운 뒤 영상을 재생하면 AI가 새롭게 추적합니다.")) return;
+        trackData = trackData.filter(d => d.t < s.start || d.t > s.end);
+        alert("궤적이 삭제되었습니다. 재생(▶)하여 새로 추출하세요.");
     }
 
     function adjustTime(id, f, d) {
@@ -346,8 +382,8 @@
     function toggleSelect(id) { const s = segments.find(i=>i.id===id); if(s) s.selected = !s.selected; }
     function updateLabel(id, v) { const s = segments.find(i=>i.id===id); if(s) s.label = v; }
     function batchDelete() { segments = segments.filter(s=>!s.selected); updateSegmentListUI(); }
-    function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; targetZoom = 2.5; trackData = []; alert("초기화되었습니다."); }
-    function exportData() { const data = { trackData, segments }; const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Tory_Work.json`; a.click(); }
+    function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; targetZoom = 2.5; trackData = []; alert("초기화되었습니다. 다시 영상을 재생하면 기본 트래킹을 새로 생성합니다."); }
+    function exportData() { const data = { trackData, segments }; const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Tory_Work_Fixed.json`; a.click(); }
 
     function playSegment(id) {
         const s = segments.find(i=>i.id===id); if(!s) return;
@@ -392,6 +428,7 @@
 
     function autoGenerateSegments() {
         if(trackData.length < 10) return alert("데이터가 부족합니다.");
+        if(!confirm("기존 구간이 지워지고 재분석됩니다. 진행할까요?")) return;
         segments = []; let win = 3;
         for(let t=0; t<video.duration; t+=win) {
             const chunk = trackData.filter(d => d.t >= t && d.t < t+win);
