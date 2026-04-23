@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.21 (Classic Tracking)</title>
+    <title>CrystalTory_Motion V5.22 (Smooth Replay)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -184,9 +184,35 @@
     canvas.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', doDrag); window.addEventListener('mouseup', () => isDragging=false);
     canvas.addEventListener('touchstart', startDrag, {passive:false}); canvas.addEventListener('touchmove', (e) => { e.preventDefault(); doDrag(e); }, {passive:false}); canvas.addEventListener('touchend', () => isDragging=false);
 
+    // [V5.22 핵심 수정] 데이터 보간법 (Interpolation) 및 모드 깜빡임 방지 로직
     function getStoredTrack(time) {
-        const rounded = Math.round(time * 10) / 10;
-        return trackData.find(d => Math.abs(d.t - rounded) < 0.15);
+        if (trackData.length === 0) return null;
+
+        let prev = null, next = null;
+        for(let i=0; i<trackData.length; i++) {
+            if(trackData[i].t <= time) prev = trackData[i];
+            if(trackData[i].t > time) { next = trackData[i]; break; }
+        }
+
+        // 1. 앞뒤 데이터가 모두 있고, 그 간격이 0.5초 이하일 경우 -> 미세 빈공간(Micro-gap)이므로 부드럽게 이음(보간)
+        if (prev && next) {
+            const gap = next.t - prev.t;
+            if (gap <= 0.5) {
+                const ratio = (time - prev.t) / gap;
+                return {
+                    x: parseFloat(prev.x) + (parseFloat(next.x) - parseFloat(prev.x)) * ratio,
+                    y: parseFloat(prev.y) + (parseFloat(next.y) - parseFloat(prev.y)) * ratio,
+                    z: parseFloat(prev.z) + (parseFloat(next.z) - parseFloat(prev.z)) * ratio
+                };
+            }
+        }
+        
+        // 2. 정확히 매칭되거나 아주 가까운 데이터가 있을 경우
+        if (prev && (time - prev.t < 0.2)) return prev;
+        if (next && (next.t - time < 0.2)) return next;
+
+        // 3. 0.5초 이상 비어있다면 진짜 데이터가 없는 구간이므로 AI 레코딩 모드로 전환
+        return null;
     }
 
     async function detectPerson() {
@@ -203,7 +229,6 @@
         if(!isDragging) { modeStatus.innerText = "🔴 AI 레코딩"; modeStatus.style.background = "var(--highlight-red)"; modeStatus.style.color = "white"; }
         
         try {
-            // [V5.21 성능 복구] 원본 비디오 대신, 이미 확대된 'canvas' 화면을 기반으로 탐색 (정확도 복구)
             const predictions = await model.detect(canvas); 
             const persons = predictions.filter(p => p.class === 'person');
             let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
@@ -232,8 +257,10 @@
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         
         if (!isDragging) {
-            centerX += (targetX - centerX) * 0.25; 
-            centerY += (targetY - centerY) * 0.25;
+            // 리플레이 모드일 때는 보간된 데이터에 맞춰 아주 부드럽게(0.35) 쫓아감
+            const ease = (modeStatus.innerText.includes("리플레이")) ? 0.35 : 0.25;
+            centerX += (targetX - centerX) * ease; 
+            centerY += (targetY - centerY) * ease;
             currentZoom += (targetZoom - currentZoom) * 0.1;
         }
 
@@ -317,6 +344,10 @@
         reader.onload = (ev) => {
             const data = JSON.parse(ev.target.result);
             trackData = data.trackData || []; segments = data.segments || [];
+            
+            // 데이터 무결성 체크 (이전 버전 데이터 변환)
+            trackData = trackData.filter(d => d.t !== null && d.x !== null);
+            
             updateSegmentListUI(); autoSaveToLocal();
             alert("✅ 외부 작업 내역을 성공적으로 불러왔습니다!");
         };
@@ -396,7 +427,6 @@
 
     function togglePlay() { video.paused ? (video.play(), playBtn.innerText="Ⅱ") : (video.pause(), playBtn.innerText="▶"); }
     function toggleAutoZoom() { isAutoZoom = !isAutoZoom; btnAutoZoom.innerText = isAutoZoom ? "🔍 오토줌 ON" : "🔍 오토줌 OFF"; btnAutoZoom.classList.toggle('active'); }
-    function toggleShowAI() { showAIIndicator = !showAIIndicator; btnShowAI.innerText = showAIIndicator ? "👁️ 인식표시 ON" : "👁️ 인식표시 OFF"; btnShowAI.classList.toggle('active'); }
     function formatTime(s) { const m = Math.floor(s/60); const sec = Math.floor(s%60); return m.toString().padStart(2,'0')+":"+sec.toString().padStart(2,'0'); }
     function toggleSelect(id) { const s = segments.find(i=>i.id===id); if(s) s.selected = !s.selected; }
     function updateLabel(id, v) { const s = segments.find(i=>i.id===id); if(s) s.label = v; updateSegmentListUI(); }
