@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.29 (Polished)</title>
+    <title>CrystalTory_Motion V5.31 (Solid Shield)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -70,62 +70,80 @@
 
         .timeline-editor {
             background: var(--tuxedo-dark); border-radius: 12px; border: 1px solid var(--border);
-            display: flex; flex-direction: column; min-height: 350px; overflow: hidden;
+            display: flex; flex-direction: column; min-height: 400px; overflow: hidden;
         }
-        .timeline-header { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; background: #1f1f1f; }
-        .filter-bar { display: flex; gap: 8px; align-items: center; }
-        .filter-select { background: #222; color: white; border: 1px solid #444; padding: 6px; border-radius: 6px; font-size: 0.8rem; flex: 1; outline: none; font-weight: bold; }
+        .timeline-header { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; background: #1f1f1f; }
+        .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .filter-select { background: #222; color: white; border: 1px solid #444; padding: 6px; border-radius: 6px; font-size: 0.8rem; flex: 1; min-width: 100px; outline: none; font-weight: bold; }
         
-        .batch-ops { display: flex; gap: 8px; }
-        .batch-btn { background: #333; color: white; border: 1px solid #555; padding: 8px 12px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; flex: 1; font-weight: bold; transition: 0.2s; }
+        .batch-ops { display: flex; gap: 8px; flex: 2; min-width: 200px; }
+        .batch-btn { background: #333; color: white; border: 1px solid #555; padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; flex: 1; font-weight: bold; transition: 0.2s; }
         .batch-btn:disabled { opacity: 0.3; cursor: not-allowed; } 
 
-        .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 400px; }
+        .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 450px; position: relative; }
         .segment-item { 
             display: flex; flex-direction: column; gap: 8px; background: #111; 
             padding: 12px; border-radius: 8px; border: 1px solid #222; transition: 0.3s;
         }
-        .segment-item.active { border-color: var(--highlight-green); background: #151a15; transform: scale(1.01); box-shadow: 0 0 10px rgba(191,255,0,0.1); }
-        .seg-row { display: flex; gap: 8px; align-items: center; }
+        .segment-item.active { border-color: var(--highlight-green); background: #151a15; box-shadow: 0 0 10px rgba(191,255,0,0.05); }
+        .seg-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .seg-check { width: 18px; height: 18px; accent-color: var(--highlight-green); cursor: pointer; } 
 
         .segment-label-select { 
             background: #222; color: white; border: 1px solid #444; padding: 6px; 
-            border-radius: 6px; font-size: 0.8rem; flex: 1; font-weight: bold; outline: none;
+            border-radius: 6px; font-size: 0.8rem; flex: 1; font-weight: bold; outline: none; min-width: 100px;
         }
-        .segment-label-select.jump { color: var(--highlight-red); border-color: var(--highlight-red); }
-        .segment-label-select.slalom { color: var(--highlight-blue); border-color: var(--highlight-blue); } 
-
+        
         .action-icon-btn {
-            background: #333; border: 1px solid #555; color: white; padding: 6px 10px; 
+            background: #333; border: 1px solid #555; color: white; padding: 6px 8px; 
             border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: 0.2s;
         }
         .action-icon-btn:hover { background: #444; }
         
-        .time-ctrl { display: flex; align-items: center; gap: 5px; background: #222; padding: 4px 8px; border-radius: 6px; border: 1px solid #333;}
-        .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-weight: bold; font-size: 1rem; } 
+        .time-ctrl { display: flex; align-items: center; gap: 2px; background: #222; padding: 4px; border-radius: 6px; border: 1px solid #333; flex: 1; justify-content: center;}
+        .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-weight: bold; font-size: 1rem; padding: 0 5px; } 
+        .time-btn:hover { color: white; }
 
         .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px;}
-        .btn-group { display: flex; gap: 10px; }
-        .action-btn { flex: 1; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .action-btn { flex: 1; min-width: 120px; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
         .action-btn:hover { background: #2a2a2a; }
         .action-btn.btn-danger { color: var(--highlight-red); border-color: #552222; }
         .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); } 
+        .btn-success { border-color: var(--highlight-green); color: var(--highlight-green); } 
 
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: var(--tuxedo-dark); }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #666; }
+
+        /* [리뷰 2] 렌더링 잠금 오버레이 UI */
+        #exportLockOverlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); z-index: 9999; 
+            flex-direction: column; justify-content: center; align-items: center; text-align: center;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 5px solid #333; border-top-color: var(--highlight-red);
+            border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body> 
+
+<div id="exportLockOverlay">
+    <div class="spinner"></div>
+    <h2 style="color:var(--highlight-red); margin:0 0 10px 0;">🔴 영상 렌더링 진행 중...</h2>
+    <p style="color:#aaa; font-size:0.9rem;">영상이 끝날 때까지 조작을 멈춰주세요.<br>이 창은 작업이 완료되면 자동으로 사라집니다.</p>
+</div>
 
 <header>
     <div class="logo">CrystalTory <span>Motion</span></div>
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.29 🛡️</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.31 🛡️</div>
     </div>
 </header> 
 
@@ -172,18 +190,24 @@
         <div class="timeline-header">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size: 0.85rem; font-weight:bold;">🎥 스마트 분석 타임라인</span>
-                <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-green); font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 자동 분석</button>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="mergeAllSegments()" style="background:none; border:1px solid #444; border-radius:4px; padding:4px 8px; color:white; font-size:0.75rem; cursor:pointer;">전체 통합</button>
+                    <button onclick="autoGenerateSegments()" style="background:none; border:none; color:var(--highlight-green); font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 자동 분석</button>
+                </div>
             </div>
             <div class="filter-bar">
+                <label style="display:flex; align-items:center; gap:5px; color:var(--point-silver); font-size:0.8rem; font-weight:bold; cursor:pointer;">
+                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" style="accent-color:var(--highlight-green);"> 전체선택
+                </label>
                 <select id="tagFilter" class="filter-select" onchange="updateSegmentListUI()">
-                    <option value="전체">전체 보기</option>
+                    <option value="전체">전체 태그 보기</option>
                     <option value="점프">점프 구간만</option>
                     <option value="슬라럼">슬라럼 구간만</option>
                     <option value="기본 트래킹">트래킹만</option>
                 </select>
                 <div class="batch-ops">
-                    <button class="batch-btn" id="btnBatchExtract" onclick="batchExtract()" style="color:var(--highlight-blue);" disabled>선택 추출 (0)</button>
-                    <button class="batch-btn" id="btnBatchDelete" onclick="batchDelete()" style="color:var(--highlight-red);" disabled>선택 삭제 (0)</button>
+                    <button class="batch-btn" id="btnBatchExtract" onclick="batchExtract()" style="color:var(--highlight-blue);" disabled>추출 (0)</button>
+                    <button class="batch-btn" id="btnBatchDelete" onclick="batchDelete()" style="color:var(--highlight-red);" disabled>삭제 (0)</button>
                 </div>
             </div>
         </div>
@@ -192,8 +216,9 @@
 
     <div class="control-panel">
         <div class="btn-group">
-            <button class="action-btn btn-danger" onclick="resetCenter()">🧹 전체 궤적 초기화</button>
-            <button class="action-btn btn-primary" onclick="exportData()">💾 전체 데이터 저장</button>
+            <button class="action-btn btn-danger" onclick="resetCenter()">🧹 궤적 초기화</button>
+            <button class="action-btn btn-primary" onclick="exportData()">💾 JSON 저장</button>
+            <button class="action-btn btn-success" onclick="exportEntireVideo()">🎬 전체 영상 렌더링</button>
         </div>
     </div>
 </main> 
@@ -217,6 +242,7 @@
     const segmentListUI = document.getElementById('segmentList');
     const tagFilter = document.getElementById('tagFilter'); 
     const btnRecMode = document.getElementById('btnRecMode');
+    const exportLockOverlay = document.getElementById('exportLockOverlay');
 
     let currentZoom = 2.5; let targetZoom = 2.5;  
     let isAutoZoom = false; let centerX = 0; let centerY = 0;
@@ -227,18 +253,23 @@
     let activeSegmentId = null;
 
     let isRecordMode = true;
-    let isRendering = false; // [수정 1] 중복 렌더링 방지 플래그
-    let currentProjectName = "Tory_Video"; // [수정 2] 자동저장을 위한 프로젝트 이름
+    let isRendering = false; 
+    let currentProjectName = "Tory_Video"; 
+    
+    // [리뷰 1] 이벤트 리스너 중첩 방지 변수
+    let currentPlayChecker = null;
 
     let trackData = []; let segments = [];
     let model = null; let isDetecting = false; let targetLostFrames = 0; 
     let wakeLock = null; 
 
-    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '대기/이탈']; 
+    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '낙수', '알리', '버니홉', '스위치', 'In&Out', '대기/이탈']; 
 
     cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.color = "var(--highlight-green)"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; }); 
 
     window.addEventListener('keydown', (e) => { 
+        // 렌더링 중에는 키보드 단축키도 무효화
+        if(exportLockOverlay.style.display === 'flex') return;
         if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
         if(e.code === 'Space') { e.preventDefault(); togglePlay(); playBtn.style.transform = "scale(0.9)"; setTimeout(()=>playBtn.style.transform="scale(1)", 100); }
         if(e.code === 'ArrowRight') { e.preventDefault(); skip(10); }
@@ -258,11 +289,15 @@
         if (wakeLock !== null) { wakeLock.release(); wakeLock = null; wakeLockStatus.innerText = "🚫"; }
     } 
 
-    // [수정 2] 로컬 자동저장 로직 부활
+    // [리뷰 3] 브라우저 스토리지 5MB 초과 예외 처리 방어벽
     function autoSaveToLocal() {
         if(currentProjectName && trackData.length > 0) {
             const data = { trackData, segments };
-            localStorage.setItem('ToryMotion_' + currentProjectName, JSON.stringify(data));
+            try {
+                localStorage.setItem('ToryMotion_' + currentProjectName, JSON.stringify(data));
+            } catch (e) {
+                console.warn("로컬 저장소 한도 초과. 자동 저장이 일시 중지됩니다.");
+            }
         }
     }
 
@@ -278,10 +313,9 @@
                 centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
                 
-                // 이전 자동저장 데이터 확인
                 const savedData = localStorage.getItem('ToryMotion_' + currentProjectName);
                 if (savedData) {
-                    if(confirm(`'${file.name}' 영상으로 이전에 작업하신 내역이 안전하게 보관되어 있습니다.\n편집 데이터를 복구하시겠습니까?`)) {
+                    if(confirm(`'${file.name}' 영상으로 이전에 작업하신 내역이 있습니다.\n데이터를 복구하시겠습니까?`)) {
                         const data = JSON.parse(savedData);
                         trackData = data.trackData || []; segments = data.segments || [];
                         updateSegmentListUI();
@@ -291,12 +325,7 @@
                 }
 
                 trackData = []; segments = []; updateSegmentListUI();
-                
-                // [수정 1] 중복 렌더링 호출 방지
-                if(!isRendering) {
-                    isRendering = true; 
-                    render();
-                }
+                if(!isRendering) { isRendering = true; render(); }
             };
         }
     }); 
@@ -312,7 +341,7 @@
                 if (data.trackData) { trackData = data.trackData; }
                 
                 if(isRecordMode) toggleRecordMode(); 
-                alert("✅ 데이터를 성공적으로 불러왔습니다! 안전을 위해 '재생 전용' 모드로 자동 전환되었습니다.");
+                alert("✅ 데이터를 불러왔습니다. 안전을 위해 '재생 전용' 모드로 자동 전환되었습니다.");
                 autoSaveToLocal();
             } catch(err) { alert("❌ JSON 파싱 오류"); }
         };
@@ -405,8 +434,7 @@
                 let nTX, nTY;
 
                 if (isWideScan) {
-                    nTX = person.bbox[0] + person.bbox[2] / 2;
-                    nTY = person.bbox[1] + person.bbox[3] / 2;
+                    nTX = person.bbox[0] + person.bbox[2] / 2; nTY = person.bbox[1] + person.bbox[3] / 2;
                 } else {
                     const viewW = canvas.width / currentZoom; const viewH = canvas.height / currentZoom;
                     nTX = (centerX - viewW/2) + (person.bbox[0] + person.bbox[2]/2) / canvas.width * viewW;
@@ -424,9 +452,7 @@
                 targetLostFrames++;
                 if (targetLostFrames < 10) { 
                     targetX += velocityX; targetY += velocityY; velocityX *= 0.90; velocityY *= 0.90; 
-                } else {
-                    targetZoom += (1.0 - targetZoom) * 0.05; 
-                }
+                } else { targetZoom += (1.0 - targetZoom) * 0.05; }
             }
         } finally { isDetecting = false; }
     } 
@@ -439,23 +465,33 @@
 
             const item = document.createElement('div');
             item.className = 'segment-item'; item.id = `seg_${seg.id}`;
-            let c = seg.label === '점프' ? 'jump' : seg.label === '슬라럼' ? 'slalom' : '';
             let seekVal = (video.currentTime >= seg.start && video.currentTime <= seg.end) ? video.currentTime : seg.start;
             
             item.innerHTML = `
                 <div class="seg-row">
                     <input type="checkbox" class="seg-check" ${seg.selected ? 'checked' : ''} onchange="toggleSelect(${seg.id})">
-                    <select class="segment-label-select ${c}" onchange="updateSegmentLabel(${seg.id}, this.value)">
+                    <select class="segment-label-select" onchange="updateSegmentLabel(${seg.id}, this.value)">
                         ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
                     </select>
-                    <button class="action-icon-btn" style="padding:6px; background:#444; border:none;" onclick="splitSegment(${seg.id})" title="분할">✂</button>
-                    <button class="action-icon-btn" style="padding:6px; background:var(--highlight-red); color:white; border:none;" onclick="clearSegmentTrack(${seg.id})" title="해당 구간 궤적 청소">🧹</button>
-                    <button class="action-icon-btn" style="padding:6px; border-color:var(--highlight-blue); color:var(--highlight-blue);" onclick="playSegment(${seg.id})">▶</button>
+                    <button class="action-icon-btn" style="background:#444;" onclick="splitSegment(${seg.id})" title="현재 구간 분할">✂</button>
+                    <button class="action-icon-btn" style="background:#444;" onclick="mergeSegmentNext(${seg.id})" title="다음 구간과 병합">🔗</button>
+                    <button class="action-icon-btn" style="color:var(--highlight-red);" onclick="clearSegmentTrack(${seg.id})" title="궤적 지우기">🧹</button>
+                    <button class="action-icon-btn" style="color:var(--highlight-blue);" onclick="playSegment(${seg.id})" title="구간 재생">▶</button>
                 </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-                    <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem; min-width: 40px; text-align: center;">${formatTime(seg.start)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'start', 0.5)">+</button></div>
-                    <span style="color:#444;">~</span>
-                    <div class="time-ctrl"><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', -0.5)">-</button><span style="color:var(--highlight-green); font-size:0.75rem; min-width: 40px; text-align: center;">${formatTime(seg.end)}</span><button class="time-btn" onclick="adjustTime(${seg.id}, 'end', 0.5)">+</button></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px; gap:5px;">
+                    <div class="time-ctrl">
+                        <button class="time-btn" onclick="setSegmentTime(${seg.id}, 'start')" title="현재 시간을 시작점으로 지정">📍</button>
+                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'start', -0.1)">-</button>
+                        <span style="color:var(--highlight-green); font-size:0.75rem; min-width: 35px; text-align: center;">${formatTime(seg.start)}</span>
+                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'start', 0.1)">+</button>
+                    </div>
+                    <span style="color:#666; font-size: 0.8rem;">~</span>
+                    <div class="time-ctrl">
+                        <button class="time-btn" onclick="setSegmentTime(${seg.id}, 'end')" title="현재 시간을 끝점으로 지정">📍</button>
+                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'end', -0.1)">-</button>
+                        <span style="color:var(--highlight-green); font-size:0.75rem; min-width: 35px; text-align: center;">${formatTime(seg.end)}</span>
+                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'end', 0.1)">+</button>
+                    </div>
                 </div>
                 <input type="range" class="seg-seekbar" min="${seg.start}" max="${seg.end}" step="0.1" value="${seekVal}" 
                     onmousedown="isSegDragging=true;" onmouseup="isSegDragging=false; video.currentTime=this.value;" 
@@ -464,7 +500,7 @@
             segmentListUI.appendChild(item);
         });
         updateBatchButtons();
-        autoSaveToLocal(); // 목록 변경 시 자동저장
+        autoSaveToLocal();
     } 
 
     function updateActiveSegment(time) {
@@ -473,10 +509,18 @@
             activeSegmentId = active.id;
             document.querySelectorAll('.segment-item').forEach(el => el.classList.remove('active'));
             const activeEl = document.getElementById(`seg_${active.id}`);
-            if (activeEl) { activeEl.classList.add('active'); activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+            if (activeEl) { 
+                activeEl.classList.add('active'); 
+                const rect = activeEl.getBoundingClientRect();
+                const parentRect = segmentListUI.getBoundingClientRect();
+                if (rect.top < parentRect.top || rect.bottom > parentRect.bottom) {
+                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+                }
+            }
         }
     }
 
+    function toggleSelectAll(isChecked) { segments.forEach(s => s.selected = isChecked); updateSegmentListUI(); }
     function toggleSelect(id) { const s = segments.find(i => i.id === id); if(s) s.selected = !s.selected; updateBatchButtons(); }
     function updateSegmentLabel(id, val) { const s = segments.find(i => i.id === id); if(s) s.label = val; updateSegmentListUI(); }
     
@@ -484,8 +528,7 @@
         const s = segments.find(i=>i.id===id); if(!s) return;
         if(!confirm("이 구간의 기록만 지울까요? 기록 모드(🔴)에서 다시 채울 수 있습니다.")) return;
         trackData = trackData.filter(d => d.t < s.start || d.t > s.end);
-        autoSaveToLocal();
-        alert("해당 구간의 궤적이 삭제되었습니다.");
+        autoSaveToLocal(); alert("해당 구간의 궤적이 삭제되었습니다.");
     }
 
     function splitSegment(id) {
@@ -497,25 +540,46 @@
         seg.end = mid; segments.splice(idx + 1, 0, newSeg); updateSegmentListUI();
     }
 
+    function mergeSegmentNext(id) {
+        const idx = segments.findIndex(s => s.id === id);
+        if (idx === -1 || idx === segments.length - 1) { alert("다음 구간이 없습니다."); return; }
+        segments[idx].end = segments[idx+1].end;
+        segments.splice(idx + 1, 1); updateSegmentListUI();
+    }
+
+    function mergeAllSegments() {
+        if(segments.length === 0) return;
+        if(!confirm("모든 구간을 하나로 통합하시겠습니까?")) return;
+        const minStart = Math.min(...segments.map(s => s.start));
+        const maxEnd = Math.max(...segments.map(s => s.end));
+        segments = [{ id: Date.now(), start: minStart, end: maxEnd, label: '기본 트래킹', selected: false }];
+        updateSegmentListUI();
+    }
+
     function updateBatchButtons() {
         const count = segments.filter(s => s.selected).length;
         const btnExtract = document.getElementById('btnBatchExtract');
         const btnDelete = document.getElementById('btnBatchDelete');
-        btnExtract.innerText = `선택 추출 (${count})`; btnDelete.innerText = `선택 삭제 (${count})`;
+        btnExtract.innerText = `추출 (${count})`; btnDelete.innerText = `삭제 (${count})`;
         btnExtract.disabled = count === 0; btnDelete.disabled = count === 0;
     } 
 
     function batchDelete() {
         if(!confirm("선택한 구간을 모두 삭제할까요?")) return;
         segments = segments.filter(s => !s.selected);
-        updateSegmentListUI();
+        updateSegmentListUI(); document.getElementById('selectAllCheckbox').checked = false;
     } 
 
     async function batchExtract() {
         const selectedSegs = segments.filter(s => s.selected);
         if(selectedSegs.length === 0) return;
-        alert(`${selectedSegs.length}개의 구간을 순차적으로 추출합니다. 영상이 끝날 때까지 브라우저를 유지해주세요.`);
+        
+        // [리뷰 2] 추출 시작 시 UI 잠금 오버레이 활성화
+        exportLockOverlay.style.display = 'flex';
+        
         for(let seg of selectedSegs) { await extractSegment(seg); }
+        
+        exportLockOverlay.style.display = 'none';
         alert("✅ 모든 선택 구간의 추출이 완료되었습니다!");
     } 
 
@@ -533,15 +597,53 @@
                 a.download = `${currentProjectName}_${seg.label}_${formatTime(seg.start)}.webm`; a.click(); resolve();
             };
             recorder.start(); video.play();
-            const checker = () => {
+            
+            // [리뷰 1] 추출 중에도 이벤트 덮어쓰기 방지
+            if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
+            
+            currentPlayChecker = () => {
                 if(video.currentTime >= seg.end) {
-                    video.pause(); recorder.stop(); video.removeEventListener('timeupdate', checker);
+                    video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker);
+                    currentPlayChecker = null;
                     aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
                 }
             };
-            video.addEventListener('timeupdate', checker);
+            video.addEventListener('timeupdate', currentPlayChecker);
         });
     } 
+
+    // [리뷰 2] 전체 영상 렌더링 시 안전장치 적용
+    async function exportEntireVideo() {
+        if(!confirm("지금까지 작업하신 추적 결과 그대로 전체 영상을 새로 생성합니다. 시간이 다소 소요될 수 있습니다. 진행할까요?")) return;
+        
+        exportLockOverlay.style.display = 'flex';
+        
+        const origTime = video.currentTime; video.currentTime = 0; 
+        await new Promise(r => video.addEventListener('seeked', r, {once: true}));
+        
+        aiStatus.innerText = "🔴 전체 렌더링 중..."; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
+        const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentProjectName}_Full_Highlight.webm`; a.click();
+            video.currentTime = origTime;
+            
+            exportLockOverlay.style.display = 'none';
+            aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
+            alert("🎬 전체 영상 렌더링이 성공적으로 완료되었습니다!");
+        };
+        recorder.start(); video.play();
+        
+        if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
+        currentPlayChecker = () => { 
+            if(video.currentTime >= video.duration - 0.1) { 
+                video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker); 
+                currentPlayChecker = null;
+            } 
+        };
+        video.addEventListener('timeupdate', currentPlayChecker);
+    }
 
     function autoGenerateSegments() {
         if (trackData.length < 30) return alert("데이터가 부족합니다. 영상을 재생하여 궤적을 수집해주세요.");
@@ -565,11 +667,32 @@
         s[f] = Math.max(0, Math.round((s[f] + d) * 10) / 10); updateSegmentListUI();
     } 
 
+    function setSegmentTime(id, field) {
+        const s = segments.find(i => i.id === id); if(!s) return;
+        let newTime = Math.round(video.currentTime * 10) / 10;
+        s[field] = newTime;
+        if (s.start >= s.end) {
+            if (field === 'start') s.end = s.start + 0.5;
+            else s.start = Math.max(0, s.end - 0.5);
+        }
+        updateSegmentListUI();
+    }
+
+    // [리뷰 1] 이벤트 리스너 중첩 방어 로직 완비
     function playSegment(id) {
         const s = segments.find(i => i.id === id); if(!s) return;
         video.currentTime = s.start; video.play(); togglePlay(true);
-        const checker = () => { if(video.currentTime >= s.end) { video.pause(); togglePlay(false); video.removeEventListener('timeupdate', checker); } };
-        video.addEventListener('timeupdate', checker);
+        
+        if (currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
+        
+        currentPlayChecker = () => { 
+            if(video.currentTime >= s.end) { 
+                video.pause(); togglePlay(false); 
+                video.removeEventListener('timeupdate', currentPlayChecker); 
+                currentPlayChecker = null;
+            } 
+        };
+        video.addEventListener('timeupdate', currentPlayChecker);
     } 
 
     function render() {
