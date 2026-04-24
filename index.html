@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.31 (Solid Shield)</title>
+    <title>CrystalTory_Motion V5.32 (Sticky Focus Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -80,7 +80,7 @@
         .batch-btn { background: #333; color: white; border: 1px solid #555; padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; flex: 1; font-weight: bold; transition: 0.2s; }
         .batch-btn:disabled { opacity: 0.3; cursor: not-allowed; } 
 
-        .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 450px; position: relative; }
+        .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 450px; position: relative; scroll-behavior: smooth; }
         .segment-item { 
             display: flex; flex-direction: column; gap: 8px; background: #111; 
             padding: 12px; border-radius: 8px; border: 1px solid #222; transition: 0.3s;
@@ -117,7 +117,6 @@
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #666; }
 
-        /* [리뷰 2] 렌더링 잠금 오버레이 UI */
         #exportLockOverlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); z-index: 9999; 
@@ -134,8 +133,8 @@
 
 <div id="exportLockOverlay">
     <div class="spinner"></div>
-    <h2 style="color:var(--highlight-red); margin:0 0 10px 0;">🔴 영상 렌더링 진행 중...</h2>
-    <p style="color:#aaa; font-size:0.9rem;">영상이 끝날 때까지 조작을 멈춰주세요.<br>이 창은 작업이 완료되면 자동으로 사라집니다.</p>
+    <h2 style="color:var(--highlight-red); margin:0 0 10px 0;">🔴 영상 추출 진행 중...</h2>
+    <p style="color:#aaa; font-size:0.9rem;">작업이 안전하게 끝날 때까지 조작을 멈춰주세요.<br>완료되면 자동으로 창이 닫힙니다.</p>
 </div>
 
 <header>
@@ -143,7 +142,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.31 🛡️</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.32 🏄‍♂️</div>
     </div>
 </header> 
 
@@ -218,7 +217,7 @@
         <div class="btn-group">
             <button class="action-btn btn-danger" onclick="resetCenter()">🧹 궤적 초기화</button>
             <button class="action-btn btn-primary" onclick="exportData()">💾 JSON 저장</button>
-            <button class="action-btn btn-success" onclick="exportEntireVideo()">🎬 전체 영상 렌더링</button>
+            <button class="action-btn btn-success" onclick="exportEntireVideo()">🎬 전체 영상 추출</button>
         </div>
     </div>
 </main> 
@@ -255,8 +254,6 @@
     let isRecordMode = true;
     let isRendering = false; 
     let currentProjectName = "Tory_Video"; 
-    
-    // [리뷰 1] 이벤트 리스너 중첩 방지 변수
     let currentPlayChecker = null;
 
     let trackData = []; let segments = [];
@@ -268,7 +265,6 @@
     cocoSsd.load().then(m => { model = m; aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.color = "var(--highlight-green)"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; }); 
 
     window.addEventListener('keydown', (e) => { 
-        // 렌더링 중에는 키보드 단축키도 무효화
         if(exportLockOverlay.style.display === 'flex') return;
         if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
         if(e.code === 'Space') { e.preventDefault(); togglePlay(); playBtn.style.transform = "scale(0.9)"; setTimeout(()=>playBtn.style.transform="scale(1)", 100); }
@@ -289,15 +285,11 @@
         if (wakeLock !== null) { wakeLock.release(); wakeLock = null; wakeLockStatus.innerText = "🚫"; }
     } 
 
-    // [리뷰 3] 브라우저 스토리지 5MB 초과 예외 처리 방어벽
     function autoSaveToLocal() {
         if(currentProjectName && trackData.length > 0) {
             const data = { trackData, segments };
-            try {
-                localStorage.setItem('ToryMotion_' + currentProjectName, JSON.stringify(data));
-            } catch (e) {
-                console.warn("로컬 저장소 한도 초과. 자동 저장이 일시 중지됩니다.");
-            }
+            try { localStorage.setItem('ToryMotion_' + currentProjectName, JSON.stringify(data)); } 
+            catch (e) { console.warn("로컬 저장소 한도 초과"); }
         }
     }
 
@@ -503,6 +495,7 @@
         autoSaveToLocal();
     } 
 
+    // [핵심 변경: 화면 요동침 해결] scrollIntoView 대신 컨테이너 내부 스크롤 조작
     function updateActiveSegment(time) {
         const active = segments.find(s => time >= s.start && time <= s.end);
         if (active && active.id !== activeSegmentId) {
@@ -511,10 +504,20 @@
             const activeEl = document.getElementById(`seg_${active.id}`);
             if (activeEl) { 
                 activeEl.classList.add('active'); 
-                const rect = activeEl.getBoundingClientRect();
-                const parentRect = segmentListUI.getBoundingClientRect();
-                if (rect.top < parentRect.top || rect.bottom > parentRect.bottom) {
-                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+                
+                // 타임라인 컨테이너 내부의 스크롤만 계산해서 이동
+                const container = document.getElementById('segmentList');
+                const elTop = activeEl.offsetTop;
+                const elBottom = elTop + activeEl.clientHeight;
+                const viewTop = container.scrollTop;
+                const viewBottom = viewTop + container.clientHeight;
+
+                // 화면 밖으로 가려졌을 때만 얌전하게 중앙으로 포커싱
+                if (elTop < viewTop || elBottom > viewBottom) {
+                    container.scrollTo({
+                        top: elTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2),
+                        behavior: 'smooth'
+                    });
                 }
             }
         }
@@ -574,75 +577,85 @@
         const selectedSegs = segments.filter(s => s.selected);
         if(selectedSegs.length === 0) return;
         
-        // [리뷰 2] 추출 시작 시 UI 잠금 오버레이 활성화
         exportLockOverlay.style.display = 'flex';
         
-        for(let seg of selectedSegs) { await extractSegment(seg); }
-        
-        exportLockOverlay.style.display = 'none';
-        alert("✅ 모든 선택 구간의 추출이 완료되었습니다!");
+        try {
+            for(let seg of selectedSegs) { await extractSegment(seg); }
+            alert("✅ 모든 선택 구간의 추출이 완료되었습니다!");
+        } catch (e) {
+            alert("❌ 추출 중 오류가 발생했습니다.");
+        } finally {
+            exportLockOverlay.style.display = 'none'; // [리뷰 3] 무한 잠금 방지
+        }
     } 
 
     async function extractSegment(seg) {
-        return new Promise(async (resolve) => {
+        return new Promise(async (resolve, reject) => {
             aiStatus.innerText = `🔴 추출 중: ${seg.label}`; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
             video.currentTime = seg.start;
             await new Promise(r => video.addEventListener('seeked', r, {once: true}));
             
-            const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            let chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                a.download = `${currentProjectName}_${seg.label}_${formatTime(seg.start)}.webm`; a.click(); resolve();
-            };
-            recorder.start(); video.play();
-            
-            // [리뷰 1] 추출 중에도 이벤트 덮어쓰기 방지
-            if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
-            
-            currentPlayChecker = () => {
-                if(video.currentTime >= seg.end) {
-                    video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker);
-                    currentPlayChecker = null;
-                    aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
-                }
-            };
-            video.addEventListener('timeupdate', currentPlayChecker);
+            try {
+                const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                let chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                    a.download = `${currentProjectName}_${seg.label}_${formatTime(seg.start)}.webm`; a.click(); resolve();
+                };
+                recorder.start(); video.play();
+                
+                if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
+                currentPlayChecker = () => {
+                    if(video.currentTime >= seg.end) {
+                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker);
+                        currentPlayChecker = null;
+                        aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
+                    }
+                };
+                video.addEventListener('timeupdate', currentPlayChecker);
+            } catch(e) { reject(e); }
         });
     } 
 
-    // [리뷰 2] 전체 영상 렌더링 시 안전장치 적용
     async function exportEntireVideo() {
-        if(!confirm("지금까지 작업하신 추적 결과 그대로 전체 영상을 새로 생성합니다. 시간이 다소 소요될 수 있습니다. 진행할까요?")) return;
+        if(!confirm("지금까지 작업하신 추적 결과 그대로 전체 영상을 새로 생성합니다. 진행할까요?")) return;
         
         exportLockOverlay.style.display = 'flex';
         
-        const origTime = video.currentTime; video.currentTime = 0; 
-        await new Promise(r => video.addEventListener('seeked', r, {once: true}));
-        
-        aiStatus.innerText = "🔴 전체 렌더링 중..."; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
-        const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-        const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'video/webm' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentProjectName}_Full_Highlight.webm`; a.click();
-            video.currentTime = origTime;
+        try {
+            const origTime = video.currentTime; video.currentTime = 0; 
+            await new Promise(r => video.addEventListener('seeked', r, {once: true}));
             
-            exportLockOverlay.style.display = 'none';
-            aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
-            alert("🎬 전체 영상 렌더링이 성공적으로 완료되었습니다!");
-        };
-        recorder.start(); video.play();
-        
-        if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
-        currentPlayChecker = () => { 
-            if(video.currentTime >= video.duration - 0.1) { 
-                video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker); 
-                currentPlayChecker = null;
-            } 
-        };
-        video.addEventListener('timeupdate', currentPlayChecker);
+            aiStatus.innerText = "🔴 전체 렌더링 중..."; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
+            const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
+            
+            await new Promise((resolve) => {
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentProjectName}_Full_Highlight.webm`; a.click();
+                    video.currentTime = origTime;
+                    aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
+                    alert("🎬 전체 영상 렌더링이 완료되었습니다!");
+                    resolve();
+                };
+                recorder.start(); video.play();
+                
+                if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
+                currentPlayChecker = () => { 
+                    if(video.currentTime >= video.duration - 0.1) { 
+                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker); 
+                        currentPlayChecker = null;
+                    } 
+                };
+                video.addEventListener('timeupdate', currentPlayChecker);
+            });
+        } catch (e) {
+            alert("❌ 렌더링 중 오류가 발생했습니다.");
+        } finally {
+            exportLockOverlay.style.display = 'none'; // 무조건 잠금 해제
+        }
     }
 
     function autoGenerateSegments() {
@@ -678,7 +691,6 @@
         updateSegmentListUI();
     }
 
-    // [리뷰 1] 이벤트 리스너 중첩 방어 로직 완비
     function playSegment(id) {
         const s = segments.find(i => i.id === id); if(!s) return;
         video.currentTime = s.start; video.play(); togglePlay(true);
@@ -762,8 +774,7 @@
     function resetCenter() { 
         if(!confirm("저장된 모든 궤적 데이터를 초기화하시겠습니까?")) return;
         targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; targetZoom = 2.5; trackData = []; 
-        autoSaveToLocal();
-        alert("🧹 궤적이 모두 초기화되었습니다.");
+        autoSaveToLocal(); alert("🧹 궤적이 모두 초기화되었습니다.");
     }
     
     function formatTime(s) { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return m.toString().padStart(2, '0') + ":" + sec.toString().padStart(2, '0'); }
