@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.33 (Splash Shield)</title>
+    <title>CrystalTory_Motion V5.34 (Loading UX Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -142,7 +142,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.33 🛡️</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.34 🕒</div>
     </div>
 </header> 
 
@@ -293,9 +293,15 @@
         }
     }
 
+    // [핵심 변경] 비디오 업로드 시 로딩 표시 및 렌더링 우선 처리
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
+            // OS가 영상을 처리하는 동안 사용자에게 시각적 피드백 제공
+            aiStatus.innerText = "⏳ 영상 준비 중..."; 
+            aiStatus.style.background = "#333"; 
+            aiStatus.style.color = "white";
+
             currentProjectName = file.name.split('.')[0];
             videoNameLabel.innerText = file.name.length > 15 ? file.name.substring(0,15)+'...' : file.name;
 
@@ -305,19 +311,25 @@
                 centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
                 
-                const savedData = localStorage.getItem('ToryMotion_' + currentProjectName);
-                if (savedData) {
-                    if(confirm(`'${file.name}' 영상으로 이전에 작업하신 내역이 있습니다.\n데이터를 복구하시겠습니까?`)) {
-                        const data = JSON.parse(savedData);
-                        trackData = data.trackData || []; segments = data.segments || [];
-                        updateSegmentListUI();
-                        if(!isRendering) { isRendering = true; render(); }
-                        return;
-                    }
-                }
-
-                trackData = []; segments = []; updateSegmentListUI();
+                // 1. 화면에 영상을 먼저 띄워주기 위해 렌더링 루프 즉시 시작
                 if(!isRendering) { isRendering = true; render(); }
+
+                // 2. 화면이 얼어붙지 않게 0.5초 뒤에 복구 알림창을 비동기로 띄움
+                setTimeout(() => {
+                    const savedData = localStorage.getItem('ToryMotion_' + currentProjectName);
+                    if (savedData) {
+                        if(confirm(`'${file.name}' 영상으로 이전에 작업하신 내역이 있습니다.\n데이터를 복구하시겠습니까?`)) {
+                            const data = JSON.parse(savedData);
+                            trackData = data.trackData || []; segments = data.segments || [];
+                            updateSegmentListUI();
+                            aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
+                            return;
+                        }
+                    }
+                    // 복구 안 하거나 데이터가 없으면 초기화
+                    trackData = []; segments = []; updateSegmentListUI();
+                    aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
+                }, 500);
             };
         }
     }); 
@@ -374,8 +386,7 @@
 
     function startDrag(e) { 
         isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; 
-        velocityX = 0; velocityY = 0; 
-        targetLostFrames = 0; // [리뷰 3] 수동 개입 시 AI의 미아 상태를 강제로 리셋 (가장 중요)
+        velocityX = 0; velocityY = 0; targetLostFrames = 0; 
     }
     function drag(e) {
         if (!isDragging) return;
@@ -384,7 +395,7 @@
         centerX -= dx * scale; centerY -= dy * scale;
         targetX = centerX; targetY = centerY;
         lastMouseX = e.clientX; lastMouseY = e.clientY;
-        targetLostFrames = 0; // [리뷰 3] 드래그 중에도 계속 리셋
+        targetLostFrames = 0; 
     }
     function endDrag() { isDragging = false; } 
 
@@ -412,15 +423,18 @@
         const stored = getStoredTrack(video.currentTime);
         if (!isRecordMode || stored) {
             if (stored) { targetX = stored.x; targetY = stored.y; targetZoom = stored.z; }
-            aiStatus.innerText = "📺 리플레이 모드"; aiStatus.style.background = "var(--highlight-blue)"; aiStatus.style.color = "black";
+            if(!aiStatus.innerText.includes("추출 중")) {
+                aiStatus.innerText = "📺 리플레이 모드"; aiStatus.style.background = "var(--highlight-blue)"; aiStatus.style.color = "black";
+            }
             return;
         }
 
         isDetecting = true;
-        aiStatus.innerText = "🔴 AI 분석 중"; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
+        if(!aiStatus.innerText.includes("추출 중")) {
+            aiStatus.innerText = "🔴 AI 분석 중"; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
+        }
 
         try {
-            // 넓은 화면 스캔 모드로의 전환 조건도 약간 늦춤 (안정성 확보)
             let isWideScan = (targetLostFrames > 30);
             const source = isWideScan ? video : canvas;
             const predictions = await model.detect(source); 
@@ -448,14 +462,9 @@
                 }
             } else {
                 targetLostFrames++;
-                // [리뷰 1,2] 물보라 쉴드 60프레임 (약 2초) 및 급브레이크
                 if (targetLostFrames < 60) { 
-                    targetX += velocityX; targetY += velocityY; 
-                    velocityX *= 0.70; velocityY *= 0.70; // 70%씩 깎아내려 브레이크 밟기
-                } else { 
-                    // 2초 넘게 놓치면 그제서야 줌아웃하며 탐색
-                    targetZoom += (1.0 - targetZoom) * 0.05; 
-                }
+                    targetX += velocityX; targetY += velocityY; velocityX *= 0.70; velocityY *= 0.70; 
+                } else { targetZoom += (1.0 - targetZoom) * 0.05; }
             }
         } finally { isDetecting = false; }
     } 
