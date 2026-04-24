@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.34 (Loading UX Fix)</title>
+    <title>CrystalTory_Motion V5.35 (Stable Focus)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -142,7 +142,7 @@
     <div style="display: flex; gap: 10px; align-items: center;">
         <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
         <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
-        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.34 🕒</div>
+        <div style="font-size: 0.8rem; color: var(--point-silver);">V5.35 ⚓</div>
     </div>
 </header> 
 
@@ -256,6 +256,10 @@
     let currentProjectName = "Tory_Video"; 
     let currentPlayChecker = null;
 
+    // [핵심 로직 A, B 적용을 위한 변수]
+    let manualOverrideTimer = 0; // 드래그 시 AI 강제 휴식 타이머
+    let zoomStableTimer = 0;     // 줌/스캔 전환 시 핑퐁 방지 쿨타임
+
     let trackData = []; let segments = [];
     let model = null; let isDetecting = false; let targetLostFrames = 0; 
     let wakeLock = null; 
@@ -273,17 +277,10 @@
     });
 
     async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                wakeLockStatus.innerText = "💡"; wakeLockStatus.title = "화면 유지 중";
-            }
+        try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLockStatus.innerText = "💡"; }
         } catch (err) { }
     } 
-
-    function releaseWakeLock() {
-        if (wakeLock !== null) { wakeLock.release(); wakeLock = null; wakeLockStatus.innerText = "🚫"; }
-    } 
+    function releaseWakeLock() { if (wakeLock !== null) { wakeLock.release(); wakeLock = null; wakeLockStatus.innerText = "🚫"; } } 
 
     function autoSaveToLocal() {
         if(currentProjectName && trackData.length > 0) {
@@ -293,40 +290,28 @@
         }
     }
 
-    // [핵심 변경] 비디오 업로드 시 로딩 표시 및 렌더링 우선 처리
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            // OS가 영상을 처리하는 동안 사용자에게 시각적 피드백 제공
-            aiStatus.innerText = "⏳ 영상 준비 중..."; 
-            aiStatus.style.background = "#333"; 
-            aiStatus.style.color = "white";
-
+            aiStatus.innerText = "⏳ 영상 준비 중..."; aiStatus.style.background = "#333"; aiStatus.style.color = "white";
             currentProjectName = file.name.split('.')[0];
             videoNameLabel.innerText = file.name.length > 15 ? file.name.substring(0,15)+'...' : file.name;
-
             video.src = URL.createObjectURL(file);
             video.onloadedmetadata = () => {
                 seekBar.max = video.duration;
-                centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
-                targetX = centerX; targetY = centerY;
-                
-                // 1. 화면에 영상을 먼저 띄워주기 위해 렌더링 루프 즉시 시작
+                centerX = video.videoWidth / 2; centerY = video.videoHeight / 2; targetX = centerX; targetY = centerY;
                 if(!isRendering) { isRendering = true; render(); }
 
-                // 2. 화면이 얼어붙지 않게 0.5초 뒤에 복구 알림창을 비동기로 띄움
                 setTimeout(() => {
                     const savedData = localStorage.getItem('ToryMotion_' + currentProjectName);
                     if (savedData) {
                         if(confirm(`'${file.name}' 영상으로 이전에 작업하신 내역이 있습니다.\n데이터를 복구하시겠습니까?`)) {
                             const data = JSON.parse(savedData);
-                            trackData = data.trackData || []; segments = data.segments || [];
-                            updateSegmentListUI();
+                            trackData = data.trackData || []; segments = data.segments || []; updateSegmentListUI();
                             aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
                             return;
                         }
                     }
-                    // 복구 안 하거나 데이터가 없으면 초기화
                     trackData = []; segments = []; updateSegmentListUI();
                     aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
                 }, 500);
@@ -335,17 +320,15 @@
     }); 
 
     jsonUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = function(event) {
             try {
                 const data = JSON.parse(event.target.result);
                 if (data.segments) { segments = data.segments.map(s => ({...s, selected: false})); updateSegmentListUI(); }
                 if (data.trackData) { trackData = data.trackData; }
-                
                 if(isRecordMode) toggleRecordMode(); 
-                alert("✅ 데이터를 불러왔습니다. 안전을 위해 '재생 전용' 모드로 자동 전환되었습니다.");
+                alert("✅ 데이터를 불러왔습니다. 안전을 위해 '재생 전용' 모드로 전환되었습니다.");
                 autoSaveToLocal();
             } catch(err) { alert("❌ JSON 파싱 오류"); }
         };
@@ -355,7 +338,7 @@
     function skip(amount) { 
         if(!isNaN(video.duration)) {
             video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); 
-            velocityX = 0; velocityY = 0; targetLostFrames = 0;
+            velocityX = 0; velocityY = 0; targetLostFrames = 0; manualOverrideTimer = 0; zoomStableTimer = 0;
         }
     } 
 
@@ -367,16 +350,14 @@
 
     function toggleRecordMode() {
         isRecordMode = !isRecordMode;
-        if(isRecordMode) {
-            btnRecMode.innerText = "🔴 AI 기록 켜짐"; btnRecMode.classList.remove('readonly');
-        } else {
-            btnRecMode.innerText = "🔒 재생 전용 모드"; btnRecMode.classList.add('readonly');
-        }
+        if(isRecordMode) { btnRecMode.innerText = "🔴 AI 기록 켜짐"; btnRecMode.classList.remove('readonly'); } 
+        else { btnRecMode.innerText = "🔒 재생 전용 모드"; btnRecMode.classList.add('readonly'); }
     }
 
     zoomRange.addEventListener('input', (e) => { 
         if(isAutoZoom) toggleAutoZoom(); 
         targetZoom = parseFloat(e.target.value); currentZoom = targetZoom; zoomVal.innerText = targetZoom.toFixed(1) + 'x'; 
+        manualOverrideTimer = 90; // 수동 줌 조작 시에도 3초 무적시간
     }); 
 
     playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
@@ -387,15 +368,15 @@
     function startDrag(e) { 
         isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; 
         velocityX = 0; velocityY = 0; targetLostFrames = 0; 
+        manualOverrideTimer = 90; // [솔루션 A] 수동 조작 시 90프레임(약 3초) 동안 AI 강제 휴식
     }
     function drag(e) {
         if (!isDragging) return;
         const dx = e.clientX - lastMouseX; const dy = e.clientY - lastMouseY;
         const scale = ((video.videoWidth / currentZoom) / playerContainer.offsetWidth) * 2.5;
-        centerX -= dx * scale; centerY -= dy * scale;
-        targetX = centerX; targetY = centerY;
+        centerX -= dx * scale; centerY -= dy * scale; targetX = centerX; targetY = centerY;
         lastMouseX = e.clientX; lastMouseY = e.clientY;
-        targetLostFrames = 0; 
+        manualOverrideTimer = 90; // 드래그 중 계속 갱신
     }
     function endDrag() { isDragging = false; } 
 
@@ -418,7 +399,7 @@
     }
 
     async function detectPerson() {
-        if (!model || video.paused || isDetecting || isDragging) return;
+        if (!model || video.paused || isDragging) return;
 
         const stored = getStoredTrack(video.currentTime);
         if (!isRecordMode || stored) {
@@ -429,22 +410,35 @@
             return;
         }
 
+        // [솔루션 A] 유예 시간이 남아있으면 AI 연산 건너뜀 (수동 개입 절대 존중)
+        if (manualOverrideTimer > 0) {
+            manualOverrideTimer--;
+            aiStatus.innerText = "✋ 수동 추적 중"; aiStatus.style.background = "var(--highlight-green)"; aiStatus.style.color = "black";
+            return;
+        }
+
         isDetecting = true;
         if(!aiStatus.innerText.includes("추출 중")) {
             aiStatus.innerText = "🔴 AI 분석 중"; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
         }
 
         try {
-            let isWideScan = (targetLostFrames > 30);
+            // [솔루션 B] 핑퐁 방지를 위한 쿨타임 감소
+            if (zoomStableTimer > 0) zoomStableTimer--;
+
+            // 사람을 놓친 지 45프레임(약 1.5초)이 넘었을 때만 넓은 스캔 사용
+            let isWideScan = (targetLostFrames > 45);
             const source = isWideScan ? video : canvas;
             const predictions = await model.detect(source); 
             const persons = predictions.filter(p => p.class === 'person');
             let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
             
             if (person) {
+                // 사람을 다시 찾았을 때: 만약 Wide 모드로 찾았다면 쿨타임 60프레임 발동
+                if (isWideScan) { zoomStableTimer = 60; }
                 targetLostFrames = 0; 
+                
                 let nTX, nTY;
-
                 if (isWideScan) {
                     nTX = person.bbox[0] + person.bbox[2] / 2; nTY = person.bbox[1] + person.bbox[3] / 2;
                 } else {
@@ -456,15 +450,19 @@
                 velocityX = (nTX - targetX) * 0.4; velocityY = (nTY - targetY) * 0.4;
                 targetX = nTX; targetY = nTY;
                 
-                if(isAutoZoom) {
+                // 오토줌: 쿨타임 중이 아닐 때만 줌을 당기도록 허용 (갑작스러운 줌인 방지)
+                if(isAutoZoom && zoomStableTimer === 0) {
                     const hRef = isWideScan ? video.videoHeight : canvas.height;
                     targetZoom = Math.max(1.2, Math.min(8.0, 2.5 * (hRef * 0.45 / person.bbox[3])));
                 }
             } else {
                 targetLostFrames++;
-                if (targetLostFrames < 60) { 
-                    targetX += velocityX; targetY += velocityY; velocityX *= 0.70; velocityY *= 0.70; 
-                } else { targetZoom += (1.0 - targetZoom) * 0.05; }
+                if (targetLostFrames < 45) { 
+                    targetX += velocityX; targetY += velocityY; velocityX *= 0.85; velocityY *= 0.85; 
+                } else { 
+                    // 못 찾은 지 오래되었다면 서서히 줌아웃하며 시야 확보
+                    targetZoom += (1.0 - targetZoom) * 0.05; 
+                }
             }
         } finally { isDetecting = false; }
     } 
@@ -511,8 +509,7 @@
             `;
             segmentListUI.appendChild(item);
         });
-        updateBatchButtons();
-        autoSaveToLocal();
+        updateBatchButtons(); autoSaveToLocal();
     } 
 
     function updateActiveSegment(time) {
@@ -524,11 +521,8 @@
             if (activeEl) { 
                 activeEl.classList.add('active'); 
                 const container = document.getElementById('segmentList');
-                const elTop = activeEl.offsetTop;
-                const elBottom = elTop + activeEl.clientHeight;
-                const viewTop = container.scrollTop;
-                const viewBottom = viewTop + container.clientHeight;
-
+                const elTop = activeEl.offsetTop; const elBottom = elTop + activeEl.clientHeight;
+                const viewTop = container.scrollTop; const viewBottom = viewTop + container.clientHeight;
                 if (elTop < viewTop || elBottom > viewBottom) {
                     container.scrollTo({ top: elTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2), behavior: 'smooth' });
                 }
@@ -589,17 +583,12 @@
     async function batchExtract() {
         const selectedSegs = segments.filter(s => s.selected);
         if(selectedSegs.length === 0) return;
-        
         exportLockOverlay.style.display = 'flex';
-        
         try {
             for(let seg of selectedSegs) { await extractSegment(seg); }
             alert("✅ 모든 선택 구간의 추출이 완료되었습니다!");
-        } catch (e) {
-            alert("❌ 추출 중 오류가 발생했습니다.");
-        } finally {
-            exportLockOverlay.style.display = 'none'; 
-        }
+        } catch (e) { alert("❌ 추출 중 오류가 발생했습니다."); } 
+        finally { exportLockOverlay.style.display = 'none'; }
     } 
 
     async function extractSegment(seg) {
@@ -621,8 +610,7 @@
                 if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
                 currentPlayChecker = () => {
                     if(video.currentTime >= seg.end) {
-                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker);
-                        currentPlayChecker = null;
+                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker); currentPlayChecker = null;
                         aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
                     }
                 };
@@ -633,9 +621,7 @@
 
     async function exportEntireVideo() {
         if(!confirm("지금까지 작업하신 추적 결과 그대로 전체 영상을 새로 생성합니다. 진행할까요?")) return;
-        
         exportLockOverlay.style.display = 'flex';
-        
         try {
             const origTime = video.currentTime; video.currentTime = 0; 
             await new Promise(r => video.addEventListener('seeked', r, {once: true}));
@@ -650,25 +636,20 @@
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentProjectName}_Full_Highlight.webm`; a.click();
                     video.currentTime = origTime;
                     aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
-                    alert("🎬 전체 영상 렌더링이 완료되었습니다!");
-                    resolve();
+                    alert("🎬 전체 영상 렌더링이 완료되었습니다!"); resolve();
                 };
                 recorder.start(); video.play();
                 
                 if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
                 currentPlayChecker = () => { 
                     if(video.currentTime >= video.duration - 0.1) { 
-                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker); 
-                        currentPlayChecker = null;
+                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker); currentPlayChecker = null;
                     } 
                 };
                 video.addEventListener('timeupdate', currentPlayChecker);
             });
-        } catch (e) {
-            alert("❌ 렌더링 중 오류가 발생했습니다.");
-        } finally {
-            exportLockOverlay.style.display = 'none';
-        }
+        } catch (e) { alert("❌ 렌더링 중 오류가 발생했습니다."); } 
+        finally { exportLockOverlay.style.display = 'none'; }
     }
 
     function autoGenerateSegments() {
@@ -684,8 +665,7 @@
             if (diffY > h * 0.15) label = '점프'; else if (diffX > w * 0.20) label = '슬라럼';
             temp.push({ start: sT, end: sT + windowSize, label: label, selected: false });
         }
-        segments = temp.map((m, idx) => ({ id: Date.now() + idx, ...m }));
-        updateSegmentListUI();
+        segments = temp.map((m, idx) => ({ id: Date.now() + idx, ...m })); updateSegmentListUI();
     } 
 
     function adjustTime(id, f, d) {
@@ -695,11 +675,9 @@
 
     function setSegmentTime(id, field) {
         const s = segments.find(i => i.id === id); if(!s) return;
-        let newTime = Math.round(video.currentTime * 10) / 10;
-        s[field] = newTime;
+        let newTime = Math.round(video.currentTime * 10) / 10; s[field] = newTime;
         if (s.start >= s.end) {
-            if (field === 'start') s.end = s.start + 0.5;
-            else s.start = Math.max(0, s.end - 0.5);
+            if (field === 'start') s.end = s.start + 0.5; else s.start = Math.max(0, s.end - 0.5);
         }
         updateSegmentListUI();
     }
@@ -707,29 +685,28 @@
     function playSegment(id) {
         const s = segments.find(i => i.id === id); if(!s) return;
         video.currentTime = s.start; video.play(); togglePlay(true);
-        
         if (currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
-        
         currentPlayChecker = () => { 
-            if(video.currentTime >= s.end) { 
-                video.pause(); togglePlay(false); 
-                video.removeEventListener('timeupdate', currentPlayChecker); 
-                currentPlayChecker = null;
-            } 
+            if(video.currentTime >= s.end) { video.pause(); togglePlay(false); video.removeEventListener('timeupdate', currentPlayChecker); currentPlayChecker = null; } 
         };
         video.addEventListener('timeupdate', currentPlayChecker);
     } 
 
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
-        if (!video.paused && !isDragging) detectPerson();
+        if (!video.paused && !isDragging && manualOverrideTimer === 0) detectPerson();
 
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         
         if (!isDragging) {
             const ease = aiStatus.innerText.includes("리플레이") ? 0.35 : 0.25;
             centerX += (targetX - centerX) * ease; centerY += (targetY - centerY) * ease;
-            currentZoom += (targetZoom - currentZoom) * 0.05; zoomRange.value = currentZoom;
+            
+            // [솔루션 B 적용] 줌 쿨타임 중에는 줌 배율을 부드럽게 유지
+            if(zoomStableTimer === 0 || !isAutoZoom) {
+                currentZoom += (targetZoom - currentZoom) * 0.05; 
+                zoomRange.value = currentZoom;
+            }
         }
         
         const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
@@ -741,8 +718,7 @@
 
         if (!video.paused) {
             const cur = video.currentTime; seekBar.value = cur;
-            
-            let canSave = isRecordMode && (isDragging || targetLostFrames < 5);
+            let canSave = isRecordMode && (isDragging || manualOverrideTimer > 0 || targetLostFrames < 5);
 
             if (canSave && Math.floor(cur * 10) % 2 === 0) {
                 let curT = Math.round(cur * 10) / 10;
@@ -766,7 +742,8 @@
         const cx = canvas.width / 2; const cy = canvas.height / 2;
         const size = 40; const padding = 20; 
         
-        ctx.strokeStyle = isDragging ? 'rgba(191, 255, 0, 0.8)' : 'rgba(255, 255, 255, 0.15)';
+        // 수동 조작 시 하이라이트
+        ctx.strokeStyle = (isDragging || manualOverrideTimer > 0) ? 'rgba(191, 255, 0, 0.8)' : 'rgba(255, 255, 255, 0.15)';
         ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
         ctx.beginPath();
