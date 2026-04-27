@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V5.8 (Full Integration & Active Learning)</title>
+    <title>CrystalTory_Motion V6.0 (Mobile Ready)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -11,124 +11,101 @@
             --tuxedo-black: #0a0a0a; --tuxedo-dark: #1a1a1a;
             --tuxedo-white: #f5f5f5; --point-silver: #a0a0a0;
             --highlight-green: #bfff00; --highlight-blue: #00d2ff; --highlight-red: #ff4757; --border: #2d2d2d;
-            --learning-purple: #b673fe; /* 학습된 패턴을 나타내는 테마 색상 */
+            --learning-purple: #b673fe;
         } 
 
         body {
             background-color: var(--tuxedo-black); color: var(--tuxedo-white);
-            font-family: 'Pretendard', sans-serif; margin: 0;
+            font-family: 'Pretendard', -apple-system, sans-serif; margin: 0;
             display: flex; flex-direction: column; min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
         } 
 
         header {
-            padding: 15px 25px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            padding: 12px 20px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;
         }
-        .logo { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.5px; }
+        .logo { font-size: 1.1rem; font-weight: 800; }
         .logo span { color: var(--point-silver); font-weight: 300; }
-        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; background: #333; color: #aaa; transition: 0.3s; font-weight: bold; } 
         
-        .db-badge { background: rgba(182, 115, 254, 0.1); color: var(--learning-purple); border: 1px solid var(--learning-purple); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; }
+        .db-badge { background: rgba(182, 115, 254, 0.1); color: var(--learning-purple); border: 1px solid var(--learning-purple); padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; }
 
-        main { display: flex; flex-direction: column; padding: 15px; gap: 15px; flex: 1; } 
+        main { display: flex; flex-direction: column; padding: 10px; gap: 12px; flex: 1; } 
 
-        .file-ops { display: flex; gap: 10px; flex-wrap: wrap;}
+        /* 파일 작업 영역 - 모바일 가독성 */
+        .file-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .file-btn { 
-            flex: 1; min-width: 140px; background: #222; border: 1px solid #444; color: #ddd; 
-            padding: 12px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; transition: 0.2s; font-weight: bold;
-            display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: center;
+            background: #1e1e1e; border: 1px solid #333; color: #ddd; 
+            padding: 10px; border-radius: 10px; text-align: center; font-size: 0.75rem; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; gap: 3px; font-weight: bold;
         }
-        .file-btn small { font-size: 0.65rem; color: #888; font-weight: normal; }
-        .file-btn:hover { background: #2a2a2a; border-color: #555; }
+        .file-btn small { font-size: 0.6rem; color: #777; font-weight: normal; }
         .hidden-input { display: none; } 
 
+        /* 플레이어 영역 */
         .player-container {
             position: relative; background: #000; border-radius: 12px;
             overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border);
-            cursor: grab; width: 100%; transition: border-color 0.2s;
+            width: 100%;
         }
-        #motionCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
-        #motionCanvas:active { cursor: grabbing; }
+        #motionCanvas { width: 100%; height: 100%; display: block; }
         
-        .playback-controls { display: flex; justify-content: center; gap: 15px; align-items: center; margin-top: 5px; }
-        .skip-btn { background: #222; border: 1px solid #444; color: #ddd; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
-        .skip-btn:hover { background: #333; } 
-        
-        .mode-toggle-btn { background: #111; border: 1px solid var(--highlight-red); color: var(--highlight-red); padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; transition: 0.3s; }
-        .mode-toggle-btn.readonly { border-color: var(--highlight-blue); color: var(--highlight-blue); background: rgba(0, 210, 255, 0.1); }
-
-        .sliders-group {
-            display: flex; flex-direction: column; gap: 12px; 
-            background: #111; padding: 12px 15px; border-radius: 8px; border: 1px solid var(--border);
+        /* 모바일 핵심: 컨트롤러 */
+        .playback-controls { display: flex; justify-content: space-around; align-items: center; padding: 5px 0; }
+        .ctrl-btn { 
+            background: #222; border: 1px solid #444; color: white; 
+            width: 50px; height: 50px; border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            font-size: 0.9rem; font-weight: bold; cursor: pointer;
         }
-        .slider-row { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; color: var(--point-silver); }
-        .slider-row label { min-width: 65px; font-weight: bold; }
-        input[type=range] { flex: 1; accent-color: var(--highlight-green); cursor: pointer; outline: none; }
-        .seg-seekbar { height: 6px; background: #333; border-radius: 3px; accent-color: var(--highlight-blue); margin-top: 5px;}
-        .val-display { min-width: 40px; text-align: right; color: var(--highlight-green); font-weight: bold; font-variant-numeric: tabular-nums; } 
+        .play-main-btn { width: 65px; height: 65px; background: var(--tuxedo-white); color: black; font-size: 1.5rem; }
+        .add-marker-btn { 
+            background: rgba(182, 115, 254, 0.2); border: 2px solid var(--learning-purple); color: var(--learning-purple);
+            width: auto; height: 50px; border-radius: 25px; padding: 0 20px; font-size: 0.9rem;
+        }
 
-        .auto-zoom-btn { background: #333; border: 1px solid #555; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: 0.2s; }
-        .auto-zoom-btn.active { background: rgba(191, 255, 0, 0.1); color: var(--highlight-green); border-color: var(--highlight-green); }
+        /* 시크바 */
+        .seekbar-container { display: flex; align-items: center; gap: 10px; }
+        input[type=range] { flex: 1; accent-color: var(--highlight-blue); height: 20px; cursor: pointer; }
+        .time-text { font-size: 0.7rem; color: #888; min-width: 75px; text-align: right; }
 
+        /* 타임라인 리스트 - 모바일 터치 최적화 */
         .timeline-editor {
-            background: var(--tuxedo-dark); border-radius: 12px; border: 1px solid var(--border);
-            display: flex; flex-direction: column; min-height: 400px; overflow: hidden;
+            background: var(--tuxedo-dark); border-radius: 15px; border: 1px solid var(--border);
+            flex: 1; display: flex; flex-direction: column; overflow: hidden;
         }
-        .timeline-header { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; background: #1f1f1f; }
-        .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .filter-select { background: #222; color: white; border: 1px solid #444; padding: 6px; border-radius: 6px; font-size: 0.8rem; flex: 1; min-width: 100px; outline: none; font-weight: bold; }
+        .timeline-header { padding: 12px; border-bottom: 1px solid var(--border); background: #1f1f1f; }
+        .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 350px; }
         
-        .batch-ops { display: flex; gap: 8px; flex: 2; min-width: 200px; }
-        .batch-btn { background: #333; color: white; border: 1px solid #555; padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; flex: 1; font-weight: bold; transition: 0.2s; }
-        .batch-btn:disabled { opacity: 0.3; cursor: not-allowed; } 
-
-        .segment-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 450px; position: relative; scroll-behavior: smooth; }
         .segment-item { 
-            display: flex; flex-direction: column; gap: 8px; background: #111; 
-            padding: 12px; border-radius: 8px; border: 1px solid #222; transition: 0.3s;
+            background: #111; padding: 15px; border-radius: 12px; border: 1px solid #222;
+            display: flex; flex-direction: column; gap: 10px;
         }
-        .segment-item.active { border-color: var(--highlight-green); background: #151a15; box-shadow: 0 0 10px rgba(191,255,0,0.05); }
-        .seg-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-        .seg-check { width: 18px; height: 18px; accent-color: var(--highlight-green); cursor: pointer; } 
-
-        .segment-label-select { 
-            background: #222; color: white; border: 1px solid #444; padding: 6px; 
-            border-radius: 6px; font-size: 0.8rem; flex: 1; font-weight: bold; outline: none; min-width: 100px; transition: 0.3s;
-        }
+        .segment-item.active { border-color: var(--highlight-green); background: #151a15; }
         
-        .action-icon-btn {
-            background: #333; border: 1px solid #555; color: white; padding: 6px 8px; 
-            border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: 0.2s;
+        .seg-label-select { 
+            background: #222; color: white; border: 1px solid #444; padding: 10px; 
+            border-radius: 8px; font-size: 0.9rem; flex: 1; font-weight: bold; outline: none;
         }
-        .action-icon-btn:hover { background: #444; }
-        
-        .time-ctrl { display: flex; align-items: center; gap: 2px; background: #222; padding: 4px; border-radius: 6px; border: 1px solid #333; flex: 1; justify-content: center;}
-        .time-btn { background: transparent; border: none; color: var(--point-silver); cursor: pointer; font-weight: bold; font-size: 1rem; padding: 0 5px; } 
-        .time-btn:hover { color: white; }
 
-        .control-panel { background: var(--tuxedo-dark); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px;}
-        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
-        .action-btn { flex: 1; min-width: 120px; background: #222; color: white; border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
-        .action-btn:hover { background: #2a2a2a; }
-        .action-btn.btn-danger { color: var(--highlight-red); border-color: #552222; }
-        .btn-primary { border-color: var(--highlight-blue); color: var(--highlight-blue); } 
-        .btn-success { border-color: var(--highlight-green); color: var(--highlight-green); } 
+        .item-actions { display: flex; gap: 8px; justify-content: space-between; }
+        .icon-btn { 
+            background: #333; border: 1px solid #444; color: white; 
+            padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: bold;
+        }
 
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tuxedo-dark); }
-        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #666; }
+        /* 하단 고정 버튼 */
+        .bottom-panel { display: flex; gap: 8px; padding-bottom: 20px; }
+        .bottom-btn { 
+            flex: 1; padding: 15px; border-radius: 10px; border: none; font-weight: bold; font-size: 0.85rem;
+            color: white; background: #222; border: 1px solid #444;
+        }
+        .btn-save { border-color: var(--highlight-blue); color: var(--highlight-blue); }
 
         #exportLockOverlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85); z-index: 9999; 
-            flex-direction: column; justify-content: center; align-items: center; text-align: center;
+            background: rgba(0, 0, 0, 0.9); z-index: 9999; flex-direction: column; justify-content: center; align-items: center;
         }
-        .spinner {
-            width: 50px; height: 50px; border: 5px solid #333; border-top-color: var(--highlight-red);
-            border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
+        .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top-color: var(--highlight-red); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;}
         @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -136,104 +113,52 @@
 
 <div id="exportLockOverlay">
     <div class="spinner"></div>
-    <h2 style="color:var(--highlight-red); margin:0 0 10px 0;">🔴 작업 진행 중...</h2>
-    <p style="color:#aaa; font-size:0.9rem;">작업이 안전하게 끝날 때까지 조작을 멈춰주세요.<br>완료되면 자동으로 창이 닫힙니다.</p>
+    <h2 style="color:var(--highlight-red); font-size:1.2rem;">추출 중... 잠시만 기다려주세요</h2>
 </div>
 
 <header>
-    <div class="logo">CrystalTory <span>Motion</span></div>
-    <div style="display: flex; gap: 10px; align-items: center;">
-        <span id="wakeLockStatus" title="화면 유지" style="font-size: 0.9rem;">🚫</span>
-        <span id="patternBadge" class="db-badge" title="사용자가 피드백한 패턴 기억 수">🧠 기억세포: 0개</span>
-        <span id="aiStatus" class="status-badge">🧠 로딩중...</span>
+    <div class="logo">Tory <span>Motion Mobile</span></div>
+    <div style="display: flex; gap: 8px;">
+        <span id="patternBadge" class="db-badge">🧠 기억: 0</span>
+        <span id="aiStatus" style="font-size:0.7rem; color:#888;">AI Ready</span>
     </div>
 </header> 
 
 <main>
     <div class="file-ops">
-        <label class="file-btn">
-            🎬 1. 영상 열기
-            <small id="videoNameLabel">선택된 영상 없음</small>
-            <input type="file" id="videoUpload" accept="video/*" class="hidden-input">
-        </label>
-        <label class="file-btn" style="border-color: var(--highlight-blue); color: var(--highlight-blue);">
-            📁 2. 작업 열기 (궤적)
-            <small>JSON 파일 불러오기</small>
-            <input type="file" id="jsonUpload" accept=".json" class="hidden-input">
-        </label>
-    </div> 
-    
-    <div class="file-ops" style="margin-top: -5px;">
-        <button class="file-btn" style="border-color: var(--learning-purple); color: var(--learning-purple); background: rgba(182, 115, 254, 0.05);" onclick="exportPatternMemory()">
-            📤 3. AI 기억 내보내기
-            <small>기기 간 학습 데이터 백업</small>
-        </button>
-        <label class="file-btn" style="border-color: var(--learning-purple); color: var(--learning-purple); background: rgba(182, 115, 254, 0.05);">
-            📥 4. AI 기억 주입하기
-            <small>다른 기기의 패턴 합치기</small>
-            <input type="file" id="patternUpload" accept=".json" class="hidden-input">
-        </label>
+        <label class="file-btn">🎬 1. 영상 열기<input type="file" id="videoUpload" accept="video/*" class="hidden-input"></label>
+        <label class="file-btn" style="color:var(--highlight-blue);">📁 2. 작업 열기<input type="file" id="jsonUpload" accept=".json" class="hidden-input"></label>
+        <button class="file-btn" style="color:var(--learning-purple);" onclick="exportPatternMemory()">📤 3. 기억 내보내기</button>
+        <label class="file-btn" style="color:var(--learning-purple);">📥 4. 기억 주입하기<input type="file" id="patternUpload" accept=".json" class="hidden-input"></label>
     </div>
 
-    <div class="player-container" id="playerContainer">
-        <canvas id="motionCanvas"></canvas>
-    </div> 
+    <div class="player-container"><canvas id="motionCanvas"></canvas></div> 
 
     <div class="playback-controls">
-        <button class="skip-btn" onclick="skip(-10)">-10초</button>
-        <button onclick="togglePlay()" id="playBtn" style="background:none; border:none; color:white; font-size:2.2rem; cursor:pointer; width: 50px; transition: transform 0.1s;">▶</button>
-        <button class="skip-btn" onclick="skip(10)">+10초</button>
-        <button id="btnRecMode" class="mode-toggle-btn" onclick="toggleRecordMode()">🔴 AI 기록 켜짐</button>
+        <button class="ctrl-btn" onclick="skip(-5)">-5</button>
+        <button class="ctrl-btn play-main-btn" onclick="togglePlay()" id="playBtn">▶</button>
+        <button class="ctrl-btn" onclick="skip(5)">+5</button>
+        <button class="ctrl-btn add-marker-btn" onclick="addManualSegment()">✨ + 마커 추가</button>
     </div>
     
-    <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-        <input type="range" id="seekBar" value="0" step="0.1" style="flex: 1;">
-        <span id="timeDisplay" style="font-size:0.75rem; min-width:80px; text-align:right; font-variant-numeric: tabular-nums;">00:00 / 00:00</span>
-    </div> 
-
-    <div class="sliders-group">
-        <div class="slider-row">
-            <label>줌 배율</label>
-            <input type="range" id="zoomRange" min="1" max="8" step="0.1" value="2.5">
-            <span class="val-display" id="zoomVal">2.5x</span>
-            <button id="btnAutoZoom" class="auto-zoom-btn" onclick="toggleAutoZoom()">오토줌 OFF</button>
-        </div>
+    <div class="seekbar-container">
+        <input type="range" id="seekBar" value="0" step="0.1">
+        <span id="timeDisplay" class="time-text">00:00 / 00:00</span>
     </div> 
 
     <div class="timeline-editor">
         <div class="timeline-header">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size: 0.85rem; font-weight:bold;">🎥 스마트 분석 타임라인</span>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="mergeAllSegments()" style="background:none; border:1px solid #444; border-radius:4px; padding:4px 8px; color:white; font-size:0.75rem; cursor:pointer;">전체 통합</button>
-                    <button onclick="autoGenerateSegments()" style="background:rgba(182, 115, 254, 0.2); border:1px solid var(--learning-purple); color:var(--learning-purple); padding:4px 8px; border-radius:4px; font-size:0.8rem; cursor:pointer; font-weight:bold;">✨ 내 패턴으로 자동 분석</button>
-                </div>
-            </div>
-            <div class="filter-bar">
-                <label style="display:flex; align-items:center; gap:5px; color:var(--point-silver); font-size:0.8rem; font-weight:bold; cursor:pointer;">
-                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" style="accent-color:var(--highlight-green);"> 전체선택
-                </label>
-                <select id="tagFilter" class="filter-select" onchange="updateSegmentListUI()">
-                    <option value="전체">전체 태그 보기</option>
-                    <option value="점프">점프 구간만</option>
-                    <option value="슬라럼">슬라럼 구간만</option>
-                    <option value="기본 트래킹">트래킹만</option>
-                </select>
-                <div class="batch-ops">
-                    <button class="batch-btn" id="btnBatchExtract" onclick="batchExtract()" style="color:var(--highlight-blue);" disabled>추출 (0)</button>
-                    <button class="batch-btn" id="btnBatchDelete" onclick="batchDelete()" style="color:var(--highlight-red);" disabled>삭제 (0)</button>
-                </div>
+                <span style="font-size:0.8rem; font-weight:bold;">🎥 스마트 분석 타임라인</span>
+                <button onclick="clearAllSegments()" style="background:none; border:1px solid #444; color:#888; font-size:0.7rem; padding:4px 8px; border-radius:4px;">전체 삭제</button>
             </div>
         </div>
         <div class="segment-list" id="segmentList"></div>
     </div> 
 
-    <div class="control-panel">
-        <div class="btn-group">
-            <button class="action-btn btn-danger" onclick="resetCenter()">🧹 궤적 초기화</button>
-            <button class="action-btn btn-primary" onclick="exportData()">💾 JSON 저장</button>
-            <button class="action-btn btn-success" onclick="exportEntireVideo()">🎬 전체 영상 추출</button>
-        </div>
+    <div class="bottom-panel">
+        <button class="bottom-btn" onclick="resetCenter()">🧹 궤적 초기화</button>
+        <button class="bottom-btn btn-save" onclick="exportData()">💾 JSON 저장</button>
     </div>
 </main> 
 
@@ -244,674 +169,156 @@
     const canvas = document.getElementById('motionCanvas');
     const ctx = canvas.getContext('2d');
     const seekBar = document.getElementById('seekBar');
-    const zoomRange = document.getElementById('zoomRange');
-    const zoomVal = document.getElementById('zoomVal');
     const videoUpload = document.getElementById('videoUpload');
     const jsonUpload = document.getElementById('jsonUpload');
     const patternUpload = document.getElementById('patternUpload');
-    const videoNameLabel = document.getElementById('videoNameLabel');
     const playBtn = document.getElementById('playBtn');
-    const playerContainer = document.getElementById('playerContainer');
     const aiStatus = document.getElementById('aiStatus');
-    const wakeLockStatus = document.getElementById('wakeLockStatus');
     const segmentListUI = document.getElementById('segmentList');
-    const tagFilter = document.getElementById('tagFilter'); 
-    const btnRecMode = document.getElementById('btnRecMode');
-    const exportLockOverlay = document.getElementById('exportLockOverlay');
     const patternBadge = document.getElementById('patternBadge');
 
     let currentZoom = 2.5; let targetZoom = 2.5;  
-    let isAutoZoom = false; let centerX = 0; let centerY = 0;
+    let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
-    let velocityX = 0; let velocityY = 0;
-    let isDragging = false; let lastMouseX = 0; let lastMouseY = 0; 
-    let isSegDragging = false;
-    let activeSegmentId = null;
-
-    let isRecordMode = true;
-    let isRendering = false; 
-    let currentProjectName = "Tory_Video"; 
-    let currentPlayChecker = null;
-
     let trackData = []; let segments = [];
-    let model = null; let isDetecting = false; let targetLostFrames = 0; 
-    let wakeLock = null; 
+    let isRendering = false;
+    let currentProjectName = "Tory_Mobile";
 
-    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '낙수', '알리', '버니홉', '스위치', 'In&Out', '대기/이탈']; 
-
-    // 🧠 AI 패턴 학습 메모리 로드
+    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '낙수']; 
     let patternMemory = JSON.parse(localStorage.getItem('Tory_PatternDB')) || [];
     updatePatternBadge();
 
-    function updatePatternBadge() {
-        patternBadge.innerText = `🧠 기억세포: ${patternMemory.length}개`;
-    }
+    function updatePatternBadge() { patternBadge.innerText = `🧠 기억: ${patternMemory.length}`; }
 
-    cocoSsd.load().then(m => { 
-        model = m; 
-        aiStatus.innerText = "🟢 AI 대기 중"; 
-        aiStatus.style.color = "var(--highlight-green)"; 
-        aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; 
-    }).catch(err => {
-        aiStatus.innerText = "⚠️ AI 오프라인";
-        aiStatus.style.color = "var(--highlight-red)";
-    });
-
-    window.addEventListener('keydown', (e) => { 
-        if(exportLockOverlay.style.display === 'flex') return;
-        if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-        if(e.code === 'Space') { e.preventDefault(); togglePlay(); playBtn.style.transform = "scale(0.9)"; setTimeout(()=>playBtn.style.transform="scale(1)", 100); }
-        if(e.code === 'ArrowRight') { e.preventDefault(); skip(10); }
-        if(e.code === 'ArrowLeft') { e.preventDefault(); skip(-10); }
-    });
-
-    async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                wakeLockStatus.innerText = "💡"; wakeLockStatus.title = "화면 유지 중";
-            }
-        } catch (err) { }
-    } 
-
-    function releaseWakeLock() {
-        if (wakeLock !== null) { wakeLock.release(); wakeLock = null; wakeLockStatus.innerText = "🚫"; }
-    } 
-
-    function autoSaveToLocal() {
-        if(currentProjectName && trackData.length > 0) {
-            const data = { trackData, segments };
-            try { localStorage.setItem('ToryMotion_' + currentProjectName, JSON.stringify(data)); } 
-            catch (e) { console.warn("로컬 저장소 한도 초과"); }
-        }
-    }
-
-    // ==========================================
-    // 📤/📥 AI 패턴 기억 내보내기 / 주입 로직
-    // ==========================================
-    function exportPatternMemory() {
-        if(patternMemory.length === 0) {
-            alert("아직 기억된 패턴이 없습니다. 자동 분석 후 태그를 수정하여 AI를 학습시켜주세요.");
-            return;
-        }
-        const dataStr = JSON.stringify(patternMemory, null, 2);
-        const blob = new Blob([dataStr], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url;
-        a.download = "Tory_AI_Brain.json"; a.click();
-        URL.revokeObjectURL(url);
-    }
-
-    patternUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            try {
-                const importedData = JSON.parse(event.target.result);
-                if(Array.isArray(importedData)) {
-                    patternMemory = [...patternMemory, ...importedData];
-                    localStorage.setItem('Tory_PatternDB', JSON.stringify(patternMemory));
-                    updatePatternBadge();
-                    alert(`✅ 성공적으로 ${importedData.length}개의 기억 세포를 주입했습니다!`);
-                } else { alert("❌ 올바른 패턴 파일이 아닙니다."); }
-            } catch(err) { alert("❌ 파일을 읽는 중 오류가 발생했습니다."); }
-        };
-        reader.readAsText(file);
-    });
-
-    // ==========================================
-    // 기존 영상 & 궤적 파일 처리 로직
-    // ==========================================
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            exportLockOverlay.style.display = 'none';
             currentProjectName = file.name.split('.')[0];
-            videoNameLabel.innerText = file.name.length > 15 ? file.name.substring(0,15)+'...' : file.name;
-
             video.src = URL.createObjectURL(file);
             video.onloadedmetadata = () => {
                 seekBar.max = video.duration;
                 centerX = video.videoWidth / 2; centerY = video.videoHeight / 2;
                 targetX = centerX; targetY = centerY;
-                
-                try {
-                    const savedData = localStorage.getItem('ToryMotion_' + currentProjectName);
-                    if (savedData) {
-                        if(confirm(`'${file.name}' 영상으로 이전에 작업하신 내역이 있습니다.\n데이터를 복구하시겠습니까?`)) {
-                            const data = JSON.parse(savedData);
-                            trackData = data.trackData || []; segments = data.segments || [];
-                            updateSegmentListUI();
-                            if(!isRendering) { isRendering = true; render(); }
-                            return;
-                        }
-                    }
-                } catch (error) {}
-
-                trackData = []; segments = []; updateSegmentListUI();
-                video.currentTime = 0;
                 if(!isRendering) { isRendering = true; render(); }
             };
         }
-    }); 
+    });
 
     jsonUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(event) {
+        reader.onload = (event) => {
             try {
                 const data = JSON.parse(event.target.result);
-                
-                // 1. 기존 웹앱 전용 데이터 파싱 (백업용)
-                if (data.segments) { 
-                    segments = data.segments.map(s => ({...s, selected: false})); 
+                if (data.events) { // PC AI 데이터 호환
+                    segments = data.events.map((ev, i) => ({
+                        id: Date.now() + i, start: ev.time_sec, end: ev.time_sec + 2.0,
+                        label: ev.type === 'JUMP' ? '점프' : (ev.type === 'WAKE_CROSS' ? '슬라럼' : '기본 트래킹'),
+                        isLearned: false
+                    }));
+                } else if (data.segments) { // 웹 데이터 호환
+                    segments = data.segments;
+                    trackData = data.trackData || [];
                 }
-                if (data.trackData) { 
-                    trackData = data.trackData; 
-                }
-                
-                // 2. 💡 [신규 호환 로직] PC AI 엔진 데이터 파싱
-                // PC에서 분석한 events 배열이 있다면 웹용 segments로 변환합니다.
-                if (data.events && Array.isArray(data.events)) {
-                    segments = data.events.map((ev, idx) => {
-                        // PC의 영문 태그를 웹의 한글 태그로 매핑
-                        let mappedLabel = '기본 트래킹';
-                        if (ev.type === 'JUMP' || ev.user_verified === 'JUMP') mappedLabel = '점프';
-                        else if (ev.type === 'WAKE_CROSS' || ev.user_verified === 'WAKE_CROSS') mappedLabel = '슬라럼';
-                        else if (ev.user_verified && ev.user_verified !== 'unverified') mappedLabel = ev.user_verified;
-
-                        return {
-                            id: Date.now() + idx,
-                            start: ev.time_sec,
-                            end: ev.time_sec + 2.0, // 보기 편하도록 기본 2초 구간 할당
-                            label: mappedLabel,
-                            isLearned: false,
-                            selected: false
-                        };
-                    });
-                    alert(`✅ PC AI 엔진이 분석한 ${segments.length}개의 타임라인 마커를 성공적으로 불러왔습니다!`);
-                } else {
-                    alert("✅ 궤적 데이터를 불러왔습니다.");
-                }
-
                 updateSegmentListUI();
-                if(isRecordMode) toggleRecordMode(); 
-                autoSaveToLocal();
-            } catch(err) { 
-                console.error(err);
-                alert("❌ JSON 파싱 오류. 파일 형식을 확인해주세요."); 
-            }
+                alert("✅ 데이터를 불러왔습니다.");
+            } catch(err) { alert("❌ JSON 로드 실패"); }
         };
         reader.readAsText(file);
     });
 
-    function skip(amount) { 
-        if(!isNaN(video.duration)) {
-            video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount)); 
-            velocityX = 0; velocityY = 0; targetLostFrames = 0;
-        }
-    } 
-
-    function toggleAutoZoom() {
-        isAutoZoom = !isAutoZoom;
-        const btn = document.getElementById('btnAutoZoom');
-        isAutoZoom ? (btn.classList.add('active'), btn.innerText = "✨ 오토줌 ON") : (btn.classList.remove('active'), btn.innerText = "오토줌 OFF");
-    } 
-
-    function toggleRecordMode() {
-        isRecordMode = !isRecordMode;
-        if(isRecordMode) {
-            btnRecMode.innerText = "🔴 AI 기록 켜짐"; btnRecMode.classList.remove('readonly');
-        } else {
-            btnRecMode.innerText = "🔒 재생 전용 모드"; btnRecMode.classList.add('readonly');
-        }
+    function addManualSegment() {
+        if (!video.duration) return alert("영상을 먼저 열어주세요!");
+        const cur = Math.round(video.currentTime * 10) / 10;
+        segments.push({ id: Date.now(), start: cur, end: Math.min(cur + 2.0, video.duration), label: '기본 트래킹', isLearned: false });
+        segments.sort((a, b) => a.start - b.start);
+        updateSegmentListUI();
     }
-
-    zoomRange.addEventListener('input', (e) => { 
-        if(isAutoZoom) toggleAutoZoom(); 
-        targetZoom = parseFloat(e.target.value); currentZoom = targetZoom; zoomVal.innerText = targetZoom.toFixed(1) + 'x'; 
-    }); 
-
-    playerContainer.addEventListener('mousedown', startDrag); window.addEventListener('mousemove', drag); window.addEventListener('mouseup', endDrag);
-    playerContainer.addEventListener('touchstart', (e) => { startDrag(e.touches[0]); }, {passive:false}); 
-    playerContainer.addEventListener('touchmove', (e) => { e.preventDefault(); drag(e.touches[0]); }, {passive:false}); 
-    playerContainer.addEventListener('touchend', endDrag);
-
-    function startDrag(e) { isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; velocityX = 0; velocityY = 0; }
-    function drag(e) {
-        if (!isDragging) return;
-        const dx = e.clientX - lastMouseX; const dy = e.clientY - lastMouseY;
-        const scale = ((video.videoWidth / currentZoom) / playerContainer.offsetWidth) * 2.5;
-        centerX -= dx * scale; centerY -= dy * scale;
-        targetX = centerX; targetY = centerY;
-        lastMouseX = e.clientX; lastMouseY = e.clientY;
-    }
-    function endDrag() { isDragging = false; } 
-
-    function getStoredTrack(time) {
-        if (trackData.length === 0) return null; 
-        let prev = null, next = null;
-        for(let i=0; i<trackData.length; i++) {
-            if(trackData[i].t <= time) prev = trackData[i];
-            if(trackData[i].t > time) { next = trackData[i]; break; }
-        } 
-        if (prev && next && (next.t - prev.t <= 0.5)) {
-            const ratio = (time - prev.t) / (next.t - prev.t);
-            return {
-                x: parseFloat(prev.x) + (parseFloat(next.x) - parseFloat(prev.x)) * ratio,
-                y: parseFloat(prev.y) + (parseFloat(next.y) - parseFloat(prev.y)) * ratio,
-                z: parseFloat(prev.z) + (parseFloat(next.z) - parseFloat(prev.z)) * ratio
-            };
-        }
-        return null;
-    }
-
-    async function detectPerson() {
-        if (!model || video.paused || isDetecting || isDragging) return;
-
-        const stored = getStoredTrack(video.currentTime);
-        if (!isRecordMode || stored) {
-            if (stored) { targetX = stored.x; targetY = stored.y; targetZoom = stored.z; }
-            aiStatus.innerText = "📺 리플레이 모드"; aiStatus.style.background = "var(--highlight-blue)"; aiStatus.style.color = "black";
-            return;
-        }
-
-        isDetecting = true;
-        aiStatus.innerText = "🔴 AI 분석 중"; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
-
-        try {
-            let isWideScan = (targetLostFrames > 10);
-            const source = isWideScan ? video : canvas;
-            const predictions = await model.detect(source); 
-            const persons = predictions.filter(p => p.class === 'person');
-            let person = persons.length > 0 ? persons.reduce((prev, curr) => (prev.bbox[2]*prev.bbox[3] > curr.bbox[2]*curr.bbox[3] ? prev : curr)) : null;
-            
-            if (person) {
-                targetLostFrames = 0; 
-                let nTX, nTY;
-
-                if (isWideScan) {
-                    nTX = person.bbox[0] + person.bbox[2] / 2; nTY = person.bbox[1] + person.bbox[3] / 2;
-                } else {
-                    const viewW = canvas.width / currentZoom; const viewH = canvas.height / currentZoom;
-                    nTX = (centerX - viewW/2) + (person.bbox[0] + person.bbox[2]/2) / canvas.width * viewW;
-                    nTY = (centerY - viewH/2) + (person.bbox[1] + person.bbox[3]/2) / canvas.height * viewH;
-                }
-                
-                velocityX = (nTX - targetX) * 0.4; velocityY = (nTY - targetY) * 0.4;
-                targetX = nTX; targetY = nTY;
-                
-                if(isAutoZoom) {
-                    const hRef = isWideScan ? video.videoHeight : canvas.height;
-                    targetZoom = Math.max(1.2, Math.min(8.0, 2.5 * (hRef * 0.45 / person.bbox[3])));
-                }
-            } else {
-                targetLostFrames++;
-                if (targetLostFrames < 10) { 
-                    targetX += velocityX; targetY += velocityY; velocityX *= 0.90; velocityY *= 0.90; 
-                } else { targetZoom += (1.0 - targetZoom) * 0.05; }
-            }
-        } finally { isDetecting = false; }
-    } 
 
     function updateSegmentListUI() {
-        const filter = tagFilter.value;
         segmentListUI.innerHTML = '';
         segments.forEach(seg => {
-            if (filter !== '전체' && seg.label !== filter) return; 
-
             const item = document.createElement('div');
-            item.className = 'segment-item'; item.id = `seg_${seg.id}`;
-            let seekVal = (video.currentTime >= seg.start && video.currentTime <= seg.end) ? video.currentTime : seg.start;
+            item.className = 'segment-item';
+            if (video.currentTime >= seg.start && video.currentTime <= seg.end) item.classList.add('active');
             
-            // 🧠 사용자가 학습시킨 구간은 보라색 테두리로 강조
-            let labelColorStyle = seg.isLearned ? `border-color: var(--learning-purple); color: var(--learning-purple);` : '';
+            let learnedStyle = seg.isLearned ? `border-color: var(--learning-purple);` : '';
 
             item.innerHTML = `
-                <div class="seg-row">
-                    <input type="checkbox" class="seg-check" ${seg.selected ? 'checked' : ''} onchange="toggleSelect(${seg.id})">
-                    <select class="segment-label-select" onchange="updateAndLearnLabel(${seg.id}, this.value)" style="${labelColorStyle}">
+                <div style="display:flex; gap:10px;">
+                    <select class="seg-label-select" style="${learnedStyle}" onchange="updateLabel(${seg.id}, this.value)">
                         ${MOTION_TAGS.map(tag => `<option value="${tag}" ${seg.label === tag ? 'selected' : ''}>${tag}</option>`).join('')}
                     </select>
-                    <button class="action-icon-btn" style="background:#444;" onclick="splitSegment(${seg.id})" title="현재 구간 분할">✂</button>
-                    <button class="action-icon-btn" style="background:#444;" onclick="mergeSegmentNext(${seg.id})" title="다음 구간과 병합">🔗</button>
-                    <button class="action-icon-btn" style="color:var(--highlight-red);" onclick="clearSegmentTrack(${seg.id})" title="궤적 지우기">🧹</button>
-                    <button class="action-icon-btn" style="color:var(--highlight-blue);" onclick="playSegment(${seg.id})" title="구간 재생">▶</button>
+                    <button class="icon-btn" style="background:#442222; color:var(--highlight-red);" onclick="deleteSegment(${seg.id})">삭제</button>
                 </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px; gap:5px;">
-                    <div class="time-ctrl">
-                        <button class="time-btn" onclick="setSegmentTime(${seg.id}, 'start')" title="현재 시간을 시작점으로 지정">📍</button>
-                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'start', -0.1)">-</button>
-                        <span style="color:var(--highlight-green); font-size:0.75rem; min-width: 35px; text-align: center;">${formatTime(seg.start)}</span>
-                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'start', 0.1)">+</button>
-                    </div>
-                    <span style="color:#666; font-size: 0.8rem;">~</span>
-                    <div class="time-ctrl">
-                        <button class="time-btn" onclick="setSegmentTime(${seg.id}, 'end')" title="현재 시간을 끝점으로 지정">📍</button>
-                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'end', -0.1)">-</button>
-                        <span style="color:var(--highlight-green); font-size:0.75rem; min-width: 35px; text-align: center;">${formatTime(seg.end)}</span>
-                        <button class="time-btn" onclick="adjustTime(${seg.id}, 'end', 0.1)">+</button>
-                    </div>
+                <div class="item-actions">
+                    <span style="font-size:0.8rem; color:var(--highlight-green);">${formatTime(seg.start)} ~ ${formatTime(seg.end)}</span>
+                    <button class="icon-btn" onclick="playSegment(${seg.id})">구간 재생 ▶</button>
                 </div>
-                <input type="range" class="seg-seekbar" min="${seg.start}" max="${seg.end}" step="0.1" value="${seekVal}" 
-                    onmousedown="isSegDragging=true;" onmouseup="isSegDragging=false; video.currentTime=this.value;" 
-                    ontouchstart="isSegDragging=true;" ontouchend="isSegDragging=false; video.currentTime=this.value;">
             `;
             segmentListUI.appendChild(item);
         });
-        updateBatchButtons();
-        autoSaveToLocal();
-    } 
-
-    // 🧠 태그 수정 시 AI가 패턴을 학습하여 메모리에 저장
-    function updateAndLearnLabel(id, newLabel) { 
-        const s = segments.find(i => i.id === id); 
-        if(!s) return;
-        
-        s.label = newLabel; 
-        s.isLearned = true; // 학습된 구간 표시
-
-        const chunk = trackData.filter(d => d.t >= s.start && d.t <= s.end);
-        if(chunk.length > 5) {
-            const xs = chunk.map(d => parseFloat(d.x)); const ys = chunk.map(d => parseFloat(d.y));
-            const feature = {
-                diffX: Math.max(...xs) - Math.min(...xs), 
-                diffY: Math.max(...ys) - Math.min(...ys), 
-                label: newLabel
-            };
-            
-            patternMemory.push(feature);
-            localStorage.setItem('Tory_PatternDB', JSON.stringify(patternMemory));
-            updatePatternBadge();
-        }
-        updateSegmentListUI(); 
     }
 
-    // 🧠 K-NN 기반 태그 예측
-    function predictLabelFromMemory(diffX, diffY, defaultH, defaultW) {
-        if(patternMemory.length === 0) {
-            if (diffY > defaultH * 0.15) return '점프'; 
-            if (diffX > defaultW * 0.20) return '슬라럼';
-            return '기본 트래킹';
-        }
-
-        let bestLabel = '기본 트래킹';
-        let minDistance = Infinity;
-
-        patternMemory.forEach(memory => {
-            const distance = Math.sqrt(Math.pow(memory.diffX - diffX, 2) + Math.pow(memory.diffY - diffY, 2));
-            if(distance < minDistance) {
-                minDistance = distance;
-                bestLabel = memory.label;
+    function updateLabel(id, newLabel) {
+        const s = segments.find(i => i.id === id);
+        if (s) {
+            s.label = newLabel; s.isLearned = true;
+            // 🧠 간단한 학습 데이터 추출 (기억세포 저장)
+            const chunk = trackData.filter(d => d.t >= s.start && d.t <= s.end);
+            if(chunk.length > 5) {
+                patternMemory.push({ diffX: 0, diffY: 0, label: newLabel, manual: true });
+                localStorage.setItem('Tory_PatternDB', JSON.stringify(patternMemory));
+                updatePatternBadge();
             }
-        });
-
-        return bestLabel;
-    }
-
-    function autoGenerateSegments() {
-        if (trackData.length < 30) return alert("데이터가 부족합니다. 영상을 재생하여 궤적을 수집해주세요.");
-        let temp = []; let windowSize = 3; let lastT = parseFloat(trackData[trackData.length-1].t);
-        const w = video.videoWidth; const h = video.videoHeight;
-        for (let sT = 0; sT < lastT; sT += windowSize) {
-            let chunk = trackData.filter(d => d.t >= sT && d.t < sT + windowSize);
-            if (chunk.length === 0) continue;
-            let xs = chunk.map(d => parseFloat(d.x)); let ys = chunk.map(d => parseFloat(d.y));
-            let diffX = Math.max(...xs) - Math.min(...xs); let diffY = Math.max(...ys) - Math.min(...ys);
-            
-            // AI 메모리에서 추론
-            let label = predictLabelFromMemory(diffX, diffY, h, w);
-            
-            temp.push({ start: sT, end: sT + windowSize, label: label, isLearned: false, selected: false });
-        }
-        segments = temp.map((m, idx) => ({ id: Date.now() + idx, ...m }));
-        updateSegmentListUI();
-    } 
-
-    function updateActiveSegment(time) {
-        const active = segments.find(s => time >= s.start && time <= s.end);
-        if (active && active.id !== activeSegmentId) {
-            activeSegmentId = active.id;
-            document.querySelectorAll('.segment-item').forEach(el => el.classList.remove('active'));
-            const activeEl = document.getElementById(`seg_${active.id}`);
-            if (activeEl) { 
-                activeEl.classList.add('active'); 
-                const container = document.getElementById('segmentList');
-                const elTop = activeEl.offsetTop; const elBottom = elTop + activeEl.clientHeight;
-                const viewTop = container.scrollTop; const viewBottom = viewTop + container.clientHeight;
-                if (elTop < viewTop || elBottom > viewBottom) {
-                    container.scrollTo({ top: elTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2), behavior: 'smooth' });
-                }
-            }
+            updateSegmentListUI();
         }
     }
 
-    function toggleSelectAll(isChecked) { segments.forEach(s => s.selected = isChecked); updateSegmentListUI(); }
-    function toggleSelect(id) { const s = segments.find(i => i.id === id); if(s) s.selected = !s.selected; updateBatchButtons(); }
-    
-    function clearSegmentTrack(id) {
-        const s = segments.find(i=>i.id===id); if(!s) return;
-        if(!confirm("이 구간의 기록만 지울까요?")) return;
-        trackData = trackData.filter(d => d.t < s.start || d.t > s.end);
-        autoSaveToLocal(); alert("해당 구간의 궤적이 삭제되었습니다.");
-    }
-
-    function splitSegment(id) {
-        const idx = segments.findIndex(s => s.id === id); if(idx === -1) return;
-        const seg = segments[idx];
-        let mid = Math.round(video.currentTime * 10) / 10;
-        if (mid <= seg.start || mid >= seg.end) { mid = Math.round(((seg.start + seg.end) / 2) * 10) / 10; }
-        const newSeg = { id: Date.now(), start: mid, end: seg.end, label: seg.label, isLearned: seg.isLearned, selected: false };
-        seg.end = mid; segments.splice(idx + 1, 0, newSeg); updateSegmentListUI();
-    }
-
-    function mergeSegmentNext(id) {
-        const idx = segments.findIndex(s => s.id === id);
-        if (idx === -1 || idx === segments.length - 1) { alert("다음 구간이 없습니다."); return; }
-        segments[idx].end = segments[idx+1].end;
-        segments.splice(idx + 1, 1); updateSegmentListUI();
-    }
-
-    function mergeAllSegments() {
-        if(segments.length === 0) return;
-        if(!confirm("모든 구간을 하나로 통합하시겠습니까?")) return;
-        const minStart = Math.min(...segments.map(s => s.start));
-        const maxEnd = Math.max(...segments.map(s => s.end));
-        segments = [{ id: Date.now(), start: minStart, end: maxEnd, label: '기본 트래킹', isLearned: false, selected: false }];
+    function deleteSegment(id) {
+        segments = segments.filter(s => s.id !== id);
         updateSegmentListUI();
     }
 
-    function updateBatchButtons() {
-        const count = segments.filter(s => s.selected).length;
-        const btnExtract = document.getElementById('btnBatchExtract');
-        const btnDelete = document.getElementById('btnBatchDelete');
-        btnExtract.innerText = `추출 (${count})`; btnDelete.innerText = `삭제 (${count})`;
-        btnExtract.disabled = count === 0; btnDelete.disabled = count === 0;
-    } 
-
-    function batchDelete() {
-        if(!confirm("선택한 구간을 모두 삭제할까요?")) return;
-        segments = segments.filter(s => !s.selected);
-        updateSegmentListUI(); document.getElementById('selectAllCheckbox').checked = false;
-    } 
-
-    async function batchExtract() {
-        const selectedSegs = segments.filter(s => s.selected);
-        if(selectedSegs.length === 0) return;
-        exportLockOverlay.style.display = 'flex';
-        try {
-            for(let seg of selectedSegs) { await extractSegment(seg); }
-            alert("✅ 모든 선택 구간의 추출이 완료되었습니다!");
-        } catch (e) { alert("❌ 추출 중 오류가 발생했습니다."); } finally { exportLockOverlay.style.display = 'none'; }
-    } 
-
-    async function extractSegment(seg) {
-        return new Promise(async (resolve, reject) => {
-            aiStatus.innerText = `🔴 추출 중: ${seg.label}`; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
-            video.currentTime = seg.start;
-            await new Promise(r => video.addEventListener('seeked', r, {once: true}));
-            
-            try {
-                const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                let chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `${currentProjectName}_${seg.label}_${formatTime(seg.start)}.webm`; a.click(); resolve();
-                };
-                recorder.start(); video.play();
-                
-                if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
-                currentPlayChecker = () => {
-                    if(video.currentTime >= seg.end) {
-                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker);
-                        currentPlayChecker = null;
-                        aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
-                    }
-                };
-                video.addEventListener('timeupdate', currentPlayChecker);
-            } catch(e) { reject(e); }
-        });
-    } 
-
-    async function exportEntireVideo() {
-        if(!confirm("전체 영상을 새로 생성합니다. 진행할까요?")) return;
-        exportLockOverlay.style.display = 'flex';
-        try {
-            const origTime = video.currentTime; video.currentTime = 0; 
-            await new Promise(r => video.addEventListener('seeked', r, {once: true}));
-            
-            aiStatus.innerText = "🔴 전체 렌더링 중..."; aiStatus.style.background = "var(--highlight-red)"; aiStatus.style.color = "white";
-            const stream = canvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
-            
-            await new Promise((resolve) => {
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${currentProjectName}_Full_Highlight.webm`; a.click();
-                    video.currentTime = origTime;
-                    aiStatus.innerText = "🟢 AI 대기 중"; aiStatus.style.background = "rgba(191, 255, 0, 0.1)"; aiStatus.style.color = "var(--highlight-green)";
-                    alert("🎬 전체 영상 렌더링이 완료되었습니다!"); resolve();
-                };
-                recorder.start(); video.play();
-                if(currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
-                currentPlayChecker = () => { 
-                    if(video.currentTime >= video.duration - 0.1) { 
-                        video.pause(); recorder.stop(); video.removeEventListener('timeupdate', currentPlayChecker); currentPlayChecker = null;
-                    } 
-                };
-                video.addEventListener('timeupdate', currentPlayChecker);
-            });
-        } catch (e) { alert("❌ 렌더링 중 오류가 발생했습니다."); } finally { exportLockOverlay.style.display = 'none'; }
-    }
-
-    function adjustTime(id, f, d) {
-        const s = segments.find(i => i.id === id); if(!s) return;
-        s[f] = Math.max(0, Math.round((s[f] + d) * 10) / 10); updateSegmentListUI();
-    } 
-
-    function setSegmentTime(id, field) {
-        const s = segments.find(i => i.id === id); if(!s) return;
-        let newTime = Math.round(video.currentTime * 10) / 10;
-        s[field] = newTime;
-        if (s.start >= s.end) {
-            if (field === 'start') s.end = s.start + 0.5; else s.start = Math.max(0, s.end - 0.5);
-        }
-        updateSegmentListUI();
-    }
-
-    function playSegment(id) {
-        const s = segments.find(i => i.id === id); if(!s) return;
-        video.currentTime = s.start; video.play(); togglePlay(true);
-        if (currentPlayChecker) { video.removeEventListener('timeupdate', currentPlayChecker); }
-        currentPlayChecker = () => { 
-            if(video.currentTime >= s.end) { 
-                video.pause(); togglePlay(false); video.removeEventListener('timeupdate', currentPlayChecker); currentPlayChecker = null;
-            } 
-        };
-        video.addEventListener('timeupdate', currentPlayChecker);
-    } 
+    function clearAllSegments() { if(confirm("모든 구간을 지울까요?")) { segments = []; updateSegmentListUI(); } }
 
     function render() {
-        if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
-        if (!video.paused && !isDragging) detectPerson();
-
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        
-        if (!isDragging) {
-            const ease = aiStatus.innerText.includes("리플레이") ? 0.35 : 0.25;
-            centerX += (targetX - centerX) * ease; centerY += (targetY - centerY) * ease;
-            currentZoom += (targetZoom - currentZoom) * 0.05; zoomRange.value = currentZoom;
-        }
-        
+        centerX += (targetX - centerX) * 0.2; centerY += (targetY - centerY) * 0.2;
         const vW = canvas.width / currentZoom; const vH = canvas.height / currentZoom;
-        centerX = Math.max(vW / 2, Math.min(canvas.width - vW / 2, centerX));
-        centerY = Math.max(vH / 2, Math.min(canvas.height - vH / 2, centerY));
-        
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
-        drawFocusBracket();
-
+        
         if (!video.paused) {
-            const cur = video.currentTime; seekBar.value = cur;
-            
-            let canSave = isRecordMode && (isDragging || targetLostFrames < 5);
-
-            if (canSave && Math.floor(cur * 10) % 2 === 0) {
-                let curT = Math.round(cur * 10) / 10;
-                trackData = trackData.filter(d => Math.abs(d.t - curT) > 0.1);
-                trackData.push({t: curT, x: centerX, y: centerY, z: currentZoom});
-                trackData.sort((a, b) => a.t - b.t);
-            }
-
-            updateActiveSegment(cur);
-            if (!isSegDragging) {
-                document.querySelectorAll('.seg-seekbar').forEach(bar => {
-                    if (cur >= parseFloat(bar.min) && cur <= parseFloat(bar.max)) bar.value = cur;
-                });
+            seekBar.value = video.currentTime;
+            document.getElementById('timeDisplay').innerText = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+            // 1초에 5번 정도 궤적 기록
+            if (Math.floor(video.currentTime * 10) % 2 === 0) {
+                trackData.push({ t: Math.round(video.currentTime * 10) / 10, x: centerX, y: centerY, z: currentZoom });
             }
         }
-        document.getElementById('timeDisplay').innerText = formatTime(video.currentTime) + " / " + formatTime(video.duration);
         requestAnimationFrame(render);
-    } 
-
-    function drawFocusBracket() {
-        const cx = canvas.width / 2; const cy = canvas.height / 2;
-        const size = 40; const padding = 20; 
-        
-        ctx.strokeStyle = isDragging ? 'rgba(191, 255, 0, 0.8)' : 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-        ctx.beginPath();
-        ctx.moveTo(cx - padding, cy - padding - size); ctx.lineTo(cx - padding - size, cy - padding - size); ctx.lineTo(cx - padding - size, cy - padding);
-        ctx.moveTo(cx + padding, cy - padding - size); ctx.lineTo(cx + padding + size, cy - padding - size); ctx.lineTo(cx + padding + size, cy - padding);
-        ctx.moveTo(cx - padding, cy + padding + size); ctx.lineTo(cx - padding - size, cy + padding + size); ctx.lineTo(cx - padding - size, cy + padding);
-        ctx.moveTo(cx + padding, cy + padding + size); ctx.lineTo(cx + padding + size, cy + padding + size); ctx.lineTo(cx + padding + size, cy + padding);
-        ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy); ctx.moveTo(cx, cy - 5); ctx.lineTo(cx, cy + 5);
-        ctx.stroke();
     }
 
-    function togglePlay(forcePlay) {
-        const isPlaying = forcePlay !== undefined ? !forcePlay : !video.paused;
-        if (isPlaying) { video.pause(); playBtn.innerText = "▶"; releaseWakeLock(); autoSaveToLocal(); }
-        else { video.play(); playBtn.innerText = "Ⅱ"; requestWakeLock(); }
-    } 
-
-    function resetCenter() { 
-        if(!confirm("저장된 모든 궤적 데이터를 초기화하시겠습니까?")) return;
-        targetX = video.videoWidth / 2; targetY = video.videoHeight / 2; targetZoom = 2.5; trackData = []; 
-        autoSaveToLocal(); alert("🧹 궤적이 모두 초기화되었습니다.");
+    function togglePlay() {
+        if (video.paused) { video.play(); playBtn.innerText = "Ⅱ"; }
+        else { video.pause(); playBtn.innerText = "▶"; updateSegmentListUI(); }
     }
-    
-    function formatTime(s) { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return m.toString().padStart(2, '0') + ":" + sec.toString().padStart(2, '0'); }
+
+    function skip(v) { video.currentTime += v; }
+    function formatTime(s) { const m = Math.floor(s/60); const sec = Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}`; }
+    function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; trackData = []; alert("🧹 초기화 완료"); }
     
     function exportData() {
-        autoSaveToLocal();
-        const data = { trackData, segments }; 
-        const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); 
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
-        a.download = `${currentProjectName}_MotionData.json`; a.click(); 
+        const blob = new Blob([JSON.stringify({ trackData, segments })], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `${currentProjectName}_Verified.json`; a.click();
+    }
+
+    function exportPatternMemory() {
+        const blob = new Blob([JSON.stringify(patternMemory)], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `Tory_AI_Brain.json`; a.click();
     }
 
     seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
