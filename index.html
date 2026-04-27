@@ -107,13 +107,14 @@
 </header> 
 
 <main>
+
     <div class="file-status-bar">
         <div class="file-row">
-            <span style="color:#aaa;">🎬 연결된 영상:</span>
-            <span id="videoNameDisp" class="file-name" style="color:var(--highlight-blue);">선택 안됨</span>
+            <span style="color:#aaa;">🎬 영상:</span>
+            <span id="videoNameDisp" class="file-name" style="color:var(--highlight-blue); background:#222; padding:2px 8px; border-radius:4px;" contenteditable="true" spellcheck="false" onblur="updateProjectName(this.innerText)">선택 안됨</span>
         </div>
         <div class="file-row">
-            <span style="color:#aaa;">📁 연결된 데이터:</span>
+            <span style="color:#aaa;">📁 데이터:</span>
             <span id="jsonNameDisp" class="file-name" style="color:var(--learning-purple);">선택 안됨</span>
         </div>
     </div>
@@ -345,6 +346,14 @@
     }
 
     seekBar.addEventListener('input', () => { video.currentTime = seekBar.value; });
+
+    // 💡 사용자가 영상 이름을 직접 수정했을 때 프로젝트명 동기화
+    function updateProjectName(newName) {
+        if (!newName || newName.trim() === "") return;
+        currentProjectName = newName.trim().replace(/\.[^/.]+$/, ""); // 혹시 모를 확장자 제거
+        alert(`✅ 앞으로 저장될 파일명이 [${currentProjectName}] (으)로 변경되었습니다.`);
+    }
+
 </script>
 </body>
 </html>
