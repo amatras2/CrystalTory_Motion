@@ -403,16 +403,49 @@
         reader.onload = function(event) {
             try {
                 const data = JSON.parse(event.target.result);
-                if (data.segments) { segments = data.segments.map(s => ({...s, selected: false})); updateSegmentListUI(); }
-                if (data.trackData) { trackData = data.trackData; }
                 
+                // 1. 기존 웹앱 전용 데이터 파싱 (백업용)
+                if (data.segments) { 
+                    segments = data.segments.map(s => ({...s, selected: false})); 
+                }
+                if (data.trackData) { 
+                    trackData = data.trackData; 
+                }
+                
+                // 2. 💡 [신규 호환 로직] PC AI 엔진 데이터 파싱
+                // PC에서 분석한 events 배열이 있다면 웹용 segments로 변환합니다.
+                if (data.events && Array.isArray(data.events)) {
+                    segments = data.events.map((ev, idx) => {
+                        // PC의 영문 태그를 웹의 한글 태그로 매핑
+                        let mappedLabel = '기본 트래킹';
+                        if (ev.type === 'JUMP' || ev.user_verified === 'JUMP') mappedLabel = '점프';
+                        else if (ev.type === 'WAKE_CROSS' || ev.user_verified === 'WAKE_CROSS') mappedLabel = '슬라럼';
+                        else if (ev.user_verified && ev.user_verified !== 'unverified') mappedLabel = ev.user_verified;
+
+                        return {
+                            id: Date.now() + idx,
+                            start: ev.time_sec,
+                            end: ev.time_sec + 2.0, // 보기 편하도록 기본 2초 구간 할당
+                            label: mappedLabel,
+                            isLearned: false,
+                            selected: false
+                        };
+                    });
+                    alert(`✅ PC AI 엔진이 분석한 ${segments.length}개의 타임라인 마커를 성공적으로 불러왔습니다!`);
+                } else {
+                    alert("✅ 궤적 데이터를 불러왔습니다.");
+                }
+
+                updateSegmentListUI();
                 if(isRecordMode) toggleRecordMode(); 
-                alert("✅ 궤적 데이터를 불러왔습니다. '재생 전용' 모드로 자동 전환되었습니다.");
                 autoSaveToLocal();
-            } catch(err) { alert("❌ JSON 파싱 오류."); }
+            } catch(err) { 
+                console.error(err);
+                alert("❌ JSON 파싱 오류. 파일 형식을 확인해주세요."); 
+            }
         };
         reader.readAsText(file);
-    }); 
+    });
 
     function skip(amount) { 
         if(!isNaN(video.duration)) {
