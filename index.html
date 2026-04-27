@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CrystalTory_Motion V6.2 (Matching Engine)</title>
+    <title>CrystalTory_Motion V6.3 (Auto Name Recovery)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
@@ -32,25 +32,27 @@
 
         main { display: flex; flex-direction: column; padding: 10px; gap: 12px; flex: 1; } 
 
-        /* 💡 파일 매칭 상태바 강화 */
+        /* 파일 매칭 상태바 */
         .file-status-bar {
             background: #111; padding: 15px; border-radius: 12px; border: 1px solid #333;
-            display: flex; flex-direction: column; gap: 10px;
+            display: flex; flex-direction: column; gap: 10px; transition: 0.3s;
         }
+        .file-status-bar.recovered { border-color: var(--highlight-green); background: #131a13; }
         .status-title { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
         .file-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .file-label { font-size: 0.85rem; color: #aaa; flex-shrink: 0; }
         .file-name { 
             font-weight: bold; font-size: 0.85rem; padding: 5px 10px; background: #222; border-radius: 6px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: right;
-            border: 1px solid transparent;
+            border: 1px solid transparent; transition: 0.3s;
         }
         .file-name.editable { border-color: #444; color: var(--highlight-blue); }
+        .file-name.success { color: var(--highlight-green); border-color: var(--highlight-green); background: rgba(191,255,0,0.1); }
 
         .matching-guide {
             font-size: 0.75rem; padding: 8px; background: rgba(0, 210, 255, 0.05); 
             border-radius: 8px; border: 1px solid rgba(0, 210, 255, 0.2); color: var(--highlight-blue);
-            text-align: center; display: none;
+            text-align: center; display: none; transition: 0.3s;
         }
 
         .file-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -107,14 +109,12 @@
         .bottom-panel { display: flex; gap: 8px; padding-bottom: 20px; }
         .bottom-btn { flex: 1; padding: 15px; border-radius: 10px; border: none; font-weight: bold; font-size: 0.85rem; color: white; background: #222; border: 1px solid #444; }
         .btn-save { border-color: var(--highlight-blue); color: var(--highlight-blue); }
-
-        .mobile-tip { font-size: 0.65rem; color: #555; text-align: center; margin-top: 10px; line-height: 1.4; }
     </style>
 </head>
 <body> 
 
 <header>
-    <div class="logo">Tory <span>Motion V6.2</span></div>
+    <div class="logo">Tory <span>Motion V6.3</span></div>
     <div style="display: flex; gap: 8px;">
         <span id="patternBadge" class="db-badge">🧠 기억: 0</span>
         <span id="aiStatus" style="font-size:0.7rem; color:#888;">AI Ready</span>
@@ -122,14 +122,14 @@
 </header> 
 
 <main>
-    <div class="file-status-bar">
+    <div id="fileStatusBar" class="file-status-bar">
         <div class="status-title">File Matching Status</div>
         <div class="file-row">
             <span class="file-label">🎬 영상:</span>
             <span id="videoNameDisp" class="file-name editable" contenteditable="true" spellcheck="false" onblur="updateProjectName(this.innerText)">선택 안됨</span>
         </div>
         <div id="matchingGuide" class="matching-guide">
-            💡 위 이름을 확인하고 매칭되는 JSON을 선택하세요.
+            💡 스마트폰 갤러리 영상은 임시 이름으로 표시될 수 있습니다. 짝이 맞는 JSON을 열어보세요.
         </div>
         <div class="file-row">
             <span class="file-label">📁 데이터:</span>
@@ -170,10 +170,6 @@
         <button class="bottom-btn" onclick="resetCenter()">🧹 궤적 초기화</button>
         <button class="bottom-btn btn-save" onclick="exportData()">💾 JSON 저장</button>
     </div>
-
-    <div class="mobile-tip">
-        아이폰 이용 시 '사진 라이브러리' 대신 <b>'파일 선택'</b>을 통해 영상을 가져오면<br>원본 파일명을 유지하기 훨씬 수월합니다.
-    </div>
 </main> 
 
 <video id="hiddenVideo" style="display:none;" playsinline muted></video> 
@@ -191,6 +187,7 @@
     const segmentListUI = document.getElementById('segmentList');
     const patternBadge = document.getElementById('patternBadge');
     
+    const fileStatusBar = document.getElementById('fileStatusBar');
     const videoNameDisp = document.getElementById('videoNameDisp');
     const jsonNameDisp = document.getElementById('jsonNameDisp');
     const matchingGuide = document.getElementById('matchingGuide');
@@ -208,17 +205,20 @@
 
     function updatePatternBadge() { patternBadge.innerText = `🧠 기억: ${patternMemory.length}`; }
 
-    // 💡 영상 로드: 이름 추출 및 가이드 표시
+    // 1. 영상 로드 (안드로이드에서 '4830' 같은 번호로 들어와도 일단 진행)
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
             const rawName = file.name;
             currentProjectName = rawName.split('.')[0];
             videoNameDisp.innerText = rawName;
+            videoNameDisp.className = "file-name editable";
+            fileStatusBar.classList.remove('recovered');
             
-            // 매칭 가이드 활성화
             matchingGuide.style.display = "block";
-            matchingGuide.innerText = `💡 [${currentProjectName}] 로 시작하는 JSON 파일을 여세요.`;
+            matchingGuide.innerText = `💡 갤러리 영상은 숫자로 보일 수 있습니다. 본인이 작업한 JSON을 선택하세요.`;
+            matchingGuide.style.color = "var(--highlight-blue)";
+            matchingGuide.style.background = "rgba(0, 210, 255, 0.05)";
             
             video.src = URL.createObjectURL(file);
             video.onloadedmetadata = () => {
@@ -230,13 +230,12 @@
         }
     });
 
-    // 💡 수동 이름 수정 시 프로젝트명 업데이트
     function updateProjectName(newName) {
         if (!newName || newName.trim() === "") return;
         currentProjectName = newName.trim().replace(/\.[^/.]+$/, "");
-        matchingGuide.innerText = `💡 이름 변경됨: [${currentProjectName}] 관련 JSON을 찾으세요.`;
     }
 
+    // 💡 2. JSON 로드 시 "원본 파일명 복구" 로직 추가
     jsonUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -245,7 +244,21 @@
             try {
                 const data = JSON.parse(event.target.result);
                 jsonNameDisp.innerText = file.name;
-                matchingGuide.style.display = "none"; // 매칭 성공 시 가이드 숨김
+                
+                // ✨ [핵심] JSON 안에 있는 진짜 영상 이름을 꺼내서 자동 복원
+                if (data.video_name) {
+                    currentProjectName = data.video_name.split('.')[0];
+                    videoNameDisp.innerText = data.video_name + " (자동 복원됨 ✨)";
+                    videoNameDisp.className = "file-name success"; // 초록색으로 변경
+                    fileStatusBar.classList.add('recovered');
+                    
+                    matchingGuide.style.display = "block";
+                    matchingGuide.innerText = `💡 성공! JSON 데이터로 잃어버린 영상 원본 이름을 복원했습니다.`;
+                    matchingGuide.style.color = "var(--highlight-green)";
+                    matchingGuide.style.background = "rgba(191, 255, 0, 0.1)";
+                } else {
+                    matchingGuide.style.display = "none";
+                }
                 
                 if (data.trackData) trackData = data.trackData;
                 
@@ -265,7 +278,6 @@
                 }
 
                 updateSegmentListUI();
-                alert("✅ 궤적 데이터 매칭 완료!");
             } catch(err) { alert("❌ JSON 로드 실패"); }
         };
         reader.readAsText(file);
@@ -310,7 +322,7 @@
         const s = segments.find(i => i.id === id);
         if (s) {
             s.label = newLabel; s.isLearned = true;
-            patternMemory.push({ label: newLabel, time: s.start }); // 단순 기억 저장
+            patternMemory.push({ label: newLabel, time: s.start });
             localStorage.setItem('Tory_PatternDB', JSON.stringify(patternMemory));
             updatePatternBadge();
             updateSegmentListUI();
@@ -342,6 +354,7 @@
     function skip(v) { video.currentTime += v; }
     function formatTime(s) { const m = Math.floor(s/60); const sec = Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}`; }
     function resetCenter() { targetX = video.videoWidth/2; targetY = video.videoHeight/2; trackData = []; alert("🧹 초기화"); }
+    
     function exportData() {
         const blob = new Blob([JSON.stringify({ trackData, segments })], {type:'application/json'});
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
