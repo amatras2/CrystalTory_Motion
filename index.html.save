@@ -279,7 +279,10 @@
         const listEl = document.getElementById('analysisList');
         listEl.innerHTML = '<div class="modal-loading">⏳ 불러오는 중...</div>';
 
-        if (firebaseConfig.apiKey === 'AIzaSyA0ni0Jr31dk152mdge80VnHHwvxZG6sf8') {
+        if (firebaseConfig.apiKey === '
+YOUR_WEB_API_KEY') {
+mmmMM
+
             listEl.innerHTML = `<div class="modal-error">⚠️ Firebase API 키 미설정<br><small style="color:#888; line-height:1.6;">index.html의 firebaseConfig.apiKey를<br>Firebase 콘솔 → 프로젝트 설정 → 일반 → 웹 API 키로 교체하세요.</small></div>`;
             return;
         }
