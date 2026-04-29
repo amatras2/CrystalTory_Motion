@@ -6,20 +6,23 @@
     <title>CrystalTory_Motion V6.5 (Smooth Tracking & File Explorer)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <!-- Firebase SDK (compat v10) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <style>
         :root {
             --tuxedo-black: #0a0a0a; --tuxedo-dark: #1a1a1a;
             --tuxedo-white: #f5f5f5; --point-silver: #a0a0a0;
             --highlight-green: #bfff00; --highlight-blue: #00d2ff; --highlight-red: #ff4757; --border: #2d2d2d;
             --learning-purple: #b673fe;
-        } 
+        }
 
         body {
             background-color: var(--tuxedo-black); color: var(--tuxedo-white);
             font-family: 'Pretendard', -apple-system, sans-serif; margin: 0;
             display: flex; flex-direction: column; min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
-        } 
+        }
 
         header {
             padding: 12px 20px; background: var(--tuxedo-dark); border-bottom: 1px solid var(--border);
@@ -27,10 +30,10 @@
         }
         .logo { font-size: 1.1rem; font-weight: 800; }
         .logo span { color: var(--point-silver); font-weight: 300; }
-        
+
         .db-badge { background: rgba(182, 115, 254, 0.1); color: var(--learning-purple); border: 1px solid var(--learning-purple); padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; }
 
-        main { display: flex; flex-direction: column; padding: 10px; gap: 12px; flex: 1; } 
+        main { display: flex; flex-direction: column; padding: 10px; gap: 12px; flex: 1; }
 
         .file-status-bar {
             background: #111; padding: 15px; border-radius: 12px; border: 1px solid #333;
@@ -40,7 +43,7 @@
         .status-title { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
         .file-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .file-label { font-size: 0.85rem; color: #aaa; flex-shrink: 0; }
-        .file-name { 
+        .file-name {
             font-weight: bold; font-size: 0.85rem; padding: 5px 10px; background: #222; border-radius: 6px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: right;
             border: 1px solid transparent; transition: 0.3s;
@@ -48,33 +51,87 @@
         .file-name.success { color: var(--highlight-green); border-color: var(--highlight-green); background: rgba(191,255,0,0.1); }
 
         .matching-guide {
-            font-size: 0.75rem; padding: 10px; background: rgba(0, 210, 255, 0.05); 
+            font-size: 0.75rem; padding: 10px; background: rgba(0, 210, 255, 0.05);
             border-radius: 10px; border: 1px solid rgba(0, 210, 255, 0.2); color: var(--highlight-blue);
             text-align: center; line-height: 1.4;
         }
 
         .file-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .file-btn { 
-            background: #1e1e1e; border: 1px solid #333; color: #ddd; 
+        .file-btn {
+            background: #1e1e1e; border: 1px solid #333; color: #ddd;
             padding: 12px; border-radius: 10px; text-align: center; font-size: 0.75rem; cursor: pointer;
             display: flex; flex-direction: column; align-items: center; gap: 5px; font-weight: bold;
         }
-        .hidden-input { display: none; } 
+        .file-btn-wide { grid-column: span 2; }
+        .file-btn-firestore {
+            background: rgba(0, 210, 255, 0.05); border-color: rgba(0, 210, 255, 0.4);
+            color: var(--highlight-blue);
+        }
+        .hidden-input { display: none; }
+
+        /* 분석 목록 모달 */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+            z-index: 200; backdrop-filter: blur(4px);
+        }
+        .modal-overlay.open { display: block; }
+        .modal-panel {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--tuxedo-dark); border-radius: 20px 20px 0 0;
+            z-index: 201; padding: 20px; max-height: 72vh;
+            display: flex; flex-direction: column;
+            border-top: 1px solid var(--border);
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 15px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .modal-title { font-size: 1rem; font-weight: bold; }
+        .modal-close-btn {
+            background: #333; border: 1px solid #555; color: #aaa;
+            width: 32px; height: 32px; border-radius: 50%; font-size: 1rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-refresh-btn {
+            background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.4);
+            color: var(--highlight-blue); padding: 6px 14px; border-radius: 8px;
+            font-size: 0.75rem; font-weight: bold; cursor: pointer;
+        }
+        .analysis-list {
+            overflow-y: auto; display: flex; flex-direction: column;
+            gap: 10px; padding-top: 15px; flex: 1;
+        }
+        .analysis-item {
+            background: #111; border: 1px solid #2a2a2a; border-radius: 12px;
+            padding: 15px; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+        }
+        .analysis-item:hover { border-color: var(--highlight-blue); background: rgba(0,210,255,0.04); }
+        .analysis-item-name { font-weight: bold; font-size: 0.95rem; color: var(--tuxedo-white); }
+        .analysis-item-date { font-size: 0.75rem; color: #666; margin-top: 5px; }
+        .analysis-item-count { font-size: 0.75rem; color: var(--highlight-green); margin-top: 3px; }
+        .analysis-item-status {
+            display: inline-block; font-size: 0.65rem; background: rgba(191,255,0,0.1);
+            color: var(--highlight-green); border: 1px solid rgba(191,255,0,0.3);
+            border-radius: 4px; padding: 2px 6px; margin-top: 6px;
+        }
+        .modal-empty { text-align: center; padding: 40px 20px; color: #555; font-size: 0.9rem; line-height: 1.6; }
+        .modal-error { text-align: center; padding: 40px 20px; color: var(--highlight-red); font-size: 0.85rem; line-height: 1.6; }
+        .modal-loading { text-align: center; padding: 40px 20px; color: #666; font-size: 0.9rem; }
 
         .player-container {
             position: relative; background: #000; border-radius: 12px;
             overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--border); width: 100%;
         }
         #motionCanvas { width: 100%; height: 100%; display: block; }
-        
+
         .playback-controls { display: flex; justify-content: space-around; align-items: center; padding: 10px 0; }
-        .ctrl-btn { 
-            background: #222; border: 1px solid #444; color: white; 
+        .ctrl-btn {
+            background: #222; border: 1px solid #444; color: white;
             width: 55px; height: 55px; border-radius: 50%; display: flex; justify-content: center; align-items: center;
             font-size: 1rem; font-weight: bold; cursor: pointer;
         }
         .play-main-btn { width: 70px; height: 70px; background: var(--tuxedo-white); color: black; font-size: 1.8rem; }
-        .add-marker-btn { 
+        .add-marker-btn {
             background: rgba(182, 115, 254, 0.2); border: 2px solid var(--learning-purple); color: var(--learning-purple);
             width: auto; height: 55px; border-radius: 30px; padding: 0 25px; font-size: 1rem;
         }
@@ -89,15 +146,15 @@
         }
         .timeline-header { padding: 15px; border-bottom: 1px solid var(--border); background: #1f1f1f; display:flex; justify-content:space-between; align-items:center; }
         .segment-list { padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 400px; }
-        
-        .segment-item { 
+
+        .segment-item {
             background: #111; padding: 15px; border-radius: 12px; border: 1px solid #222;
             display: flex; flex-direction: column; gap: 12px;
         }
         .segment-item.active { border-color: var(--highlight-green); background: #151a15; }
-        
-        .seg-label-select { 
-            background: #222; color: white; border: 1px solid #444; padding: 12px; 
+
+        .seg-label-select {
+            background: #222; color: white; border: 1px solid #444; padding: 12px;
             border-radius: 8px; font-size: 1rem; flex: 1; font-weight: bold; outline: none;
         }
 
@@ -109,7 +166,7 @@
         .btn-save { border-color: var(--highlight-blue); color: var(--highlight-blue); }
     </style>
 </head>
-<body> 
+<body>
 
 <header>
     <div class="logo">Tory <span>Motion V6.5</span></div>
@@ -117,7 +174,7 @@
         <span id="patternBadge" class="db-badge">🧠 기억: 0</span>
         <span id="aiStatus" style="font-size:0.7rem; color:#888;">AI Ready</span>
     </div>
-</header> 
+</header>
 
 <main>
     <div id="fileStatusBar" class="file-status-bar">
@@ -136,13 +193,14 @@
     </div>
 
     <div class="file-ops">
+        <button class="file-btn file-btn-wide file-btn-firestore" onclick="openAnalysisModal()">☁️ Firestore 분석 목록 불러오기</button>
         <label class="file-btn">🎬 1. 영상 열기<input type="file" id="videoUpload" class="hidden-input"></label>
         <label class="file-btn" style="color:var(--highlight-blue);">📁 2. 작업 열기<input type="file" id="jsonUpload" accept=".json" class="hidden-input"></label>
         <button class="file-btn" style="color:var(--learning-purple);" onclick="exportPatternMemory()">📤 3. 기억 내보내기</button>
         <label class="file-btn" style="color:var(--learning-purple);">📥 4. 기억 주입하기<input type="file" id="patternUpload" accept=".json" class="hidden-input"></label>
     </div>
 
-    <div class="player-container"><canvas id="motionCanvas"></canvas></div> 
+    <div class="player-container"><canvas id="motionCanvas"></canvas></div>
 
     <div class="playback-controls">
         <button class="ctrl-btn" onclick="skip(-5)">-5</button>
@@ -150,11 +208,11 @@
         <button class="ctrl-btn" onclick="skip(5)">+5</button>
         <button class="ctrl-btn add-marker-btn" onclick="addManualSegment()">✨ + 액션 캡처</button>
     </div>
-    
+
     <div class="seekbar-container">
         <input type="range" id="seekBar" value="0" step="0.1">
         <span id="timeDisplay" class="time-text">00:00 / 00:00</span>
-    </div> 
+    </div>
 
     <div class="timeline-editor">
         <div class="timeline-header">
@@ -162,17 +220,137 @@
             <button onclick="clearAllSegments()" style="background:none; border:1px solid #444; color:#888; font-size:0.75rem; padding:5px 10px; border-radius:6px;">전체 삭제</button>
         </div>
         <div class="segment-list" id="segmentList"></div>
-    </div> 
+    </div>
 
     <div class="bottom-panel">
         <button class="bottom-btn" onclick="resetCenter()">🧹 궤적 초기화</button>
         <button class="bottom-btn btn-save" onclick="exportData()">💾 JSON 저장</button>
     </div>
-</main> 
+</main>
 
-<video id="hiddenVideo" style="display:none;" playsinline muted></video> 
+<!-- Firestore 분석 목록 모달 -->
+<div id="analysisModalOverlay" class="modal-overlay" onclick="closeAnalysisModal()"></div>
+<div id="analysisModalPanel" class="modal-panel" style="display:none;">
+    <div class="modal-header">
+        <span class="modal-title">☁️ Firestore 분석 목록</span>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <button class="modal-refresh-btn" onclick="loadAnalysesList()">↻ 새로고침</button>
+            <button class="modal-close-btn" onclick="closeAnalysisModal()">✕</button>
+        </div>
+    </div>
+    <div id="analysisList" class="analysis-list">
+        <div class="modal-loading">⏳ 불러오는 중...</div>
+    </div>
+</div>
+
+<video id="hiddenVideo" style="display:none;" playsinline muted></video>
 
 <script>
+    // ── Firebase 설정 ─────────────────────────────────────────────
+    // apiKey: Firebase 콘솔 → 프로젝트 설정 → 일반 → 웹 API 키
+    const firebaseConfig = {
+        apiKey: "YOUR_WEB_API_KEY",
+        authDomain: "torytennis-c963c.firebaseapp.com",
+        projectId: "torytennis-c963c",
+        storageBucket: "torytennis.firebasestorage.app"
+    };
+
+    let _db = null;
+    function getDb() {
+        if (_db) return _db;
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        _db = firebase.firestore();
+        return _db;
+    }
+
+    // ── 분석 목록 모달 ────────────────────────────────────────────
+    function openAnalysisModal() {
+        document.getElementById('analysisModalOverlay').classList.add('open');
+        document.getElementById('analysisModalPanel').style.display = 'flex';
+        loadAnalysesList();
+    }
+
+    function closeAnalysisModal() {
+        document.getElementById('analysisModalOverlay').classList.remove('open');
+        document.getElementById('analysisModalPanel').style.display = 'none';
+    }
+
+    async function loadAnalysesList() {
+        const listEl = document.getElementById('analysisList');
+        listEl.innerHTML = '<div class="modal-loading">⏳ 불러오는 중...</div>';
+
+        if (firebaseConfig.apiKey === 'YOUR_WEB_API_KEY') {
+            listEl.innerHTML = `<div class="modal-error">⚠️ Firebase API 키 미설정<br><small style="color:#888; line-height:1.6;">index.html의 firebaseConfig.apiKey를<br>Firebase 콘솔 → 프로젝트 설정 → 일반 → 웹 API 키로 교체하세요.</small></div>`;
+            return;
+        }
+
+        try {
+            const db = getDb();
+            const snapshot = await db.collection('analyses').orderBy('analyzed_at', 'desc').get();
+
+            if (snapshot.empty) {
+                listEl.innerHTML = '<div class="modal-empty">분석 데이터가 없습니다.<br><small style="color:#444;">tory_engine.py를 실행하면 자동으로 저장됩니다.</small></div>';
+                return;
+            }
+
+            listEl.innerHTML = '';
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                const item = document.createElement('div');
+                item.className = 'analysis-item';
+                item.innerHTML = `
+                    <div class="analysis-item-name">🎬 ${d.video_name || doc.id}</div>
+                    <div class="analysis-item-date">📅 ${d.analyzed_at || '-'}</div>
+                    <div class="analysis-item-count">🎯 이벤트: ${d.event_count ?? (d.events ? d.events.length : 0)}개</div>
+                    <span class="analysis-item-status">${d.status || 'completed'}</span>
+                `;
+                item.onclick = () => selectAnalysis(doc.id, d);
+                listEl.appendChild(item);
+            });
+        } catch (err) {
+            listEl.innerHTML = `<div class="modal-error">❌ 로드 실패<br><small style="color:#888;">${err.message}</small></div>`;
+        }
+    }
+
+    function selectAnalysis(docId, data) {
+        currentProjectName = docId;
+
+        if (data.video_name) {
+            videoNameDisp.innerText = data.video_name + ' (☁️ Firestore)';
+            videoNameDisp.className = 'file-name success';
+            fileStatusBar.classList.add('recovered');
+        }
+
+        if (data.trackData) {
+            trackData = data.trackData;
+        }
+
+        jsonNameDisp.innerText = docId + ' (☁️ Firestore)';
+        jsonNameDisp.style.color = 'var(--highlight-blue)';
+
+        const evs = data.events || [];
+        if (evs.length > 0) {
+            if (confirm(`💡 AI 마커 ${evs.length}개를 불러왔습니다.\n백지 상태로 시작할까요? (추천)`)) {
+                segments = [];
+            } else {
+                segments = evs.map((ev, i) => ({
+                    id: Date.now() + i,
+                    start: ev.time_sec,
+                    end: ev.time_sec + 2.0,
+                    label: ev.type === 'JUMP' ? '점프' : (ev.type === 'WAKE_CROSS' ? '슬라럼' : '기본 트래킹'),
+                    isLearned: false
+                }));
+            }
+        } else {
+            segments = [];
+        }
+
+        matchingGuide.innerHTML = `✅ <b>Firestore 로드 성공!</b><br>${data.video_name || docId} 데이터를 불러왔습니다.`;
+        updateSegmentListUI();
+        closeAnalysisModal();
+    }
+
+    // ── 기존 앱 코드 ──────────────────────────────────────────────
     const video = document.getElementById('hiddenVideo');
     const canvas = document.getElementById('motionCanvas');
     const ctx = canvas.getContext('2d');
@@ -184,26 +362,25 @@
     const aiStatus = document.getElementById('aiStatus');
     const segmentListUI = document.getElementById('segmentList');
     const patternBadge = document.getElementById('patternBadge');
-    
+
     const fileStatusBar = document.getElementById('fileStatusBar');
     const videoNameDisp = document.getElementById('videoNameDisp');
     const jsonNameDisp = document.getElementById('jsonNameDisp');
     const matchingGuide = document.getElementById('matchingGuide');
 
-    let currentZoom = 2.5; let targetZoom = 2.5;  
+    let currentZoom = 2.5; let targetZoom = 2.5;
     let centerX = 0; let centerY = 0;
     let targetX = 0; let targetY = 0;
     let trackData = []; let segments = [];
     let isRendering = false;
     let currentProjectName = "Tory_Video";
 
-    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '낙수']; 
+    const MOTION_TAGS = ['기본 트래킹', '스타트', '슬라럼', '웨이크 진입', '점프', '에어 타임', '랜딩', '피니시', '낙수'];
     let patternMemory = JSON.parse(localStorage.getItem('Tory_PatternDB')) || [];
     updatePatternBadge();
 
     function updatePatternBadge() { patternBadge.innerText = `🧠 기억: ${patternMemory.length}`; }
 
-    // 영상 로드 
     videoUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -212,10 +389,10 @@
             videoNameDisp.innerText = rawName;
             videoNameDisp.className = "file-name";
             fileStatusBar.classList.remove('recovered');
-            
+
             matchingGuide.style.display = "block";
             matchingGuide.innerHTML = `💡 <b>[${rawName}]</b>와 짝이 맞는<br>JSON 파일을 불러오면 원본 이름을 복구합니다.`;
-            
+
             video.src = URL.createObjectURL(file);
             video.onloadedmetadata = () => {
                 seekBar.max = video.duration;
@@ -226,7 +403,6 @@
         }
     });
 
-    // JSON 로드
     jsonUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -235,7 +411,7 @@
             try {
                 const data = JSON.parse(event.target.result);
                 jsonNameDisp.innerText = file.name;
-                
+
                 if (data.video_name) {
                     currentProjectName = data.video_name.split('.')[0];
                     videoNameDisp.innerText = data.video_name + " (복원됨 ✨)";
@@ -245,7 +421,7 @@
                 }
 
                 if (data.trackData) trackData = data.trackData;
-                
+
                 if (data.events && data.events.length > 0) {
                     if (confirm("💡 AI 자동 마커들을 지우고 '백지 상태'로 시작할까요? (추천)")) {
                         segments = [];
@@ -315,17 +491,15 @@
     function deleteSegment(id) { segments = segments.filter(s => s.id !== id); updateSegmentListUI(); }
     function clearAllSegments() { if(confirm("전체 삭제하시겠습니까?")) { segments = []; updateSegmentListUI(); } }
 
-    // 💡 [수정2] 파트너님이 짜셨던 완벽한 '부드러운 보간법' 로직 복구
     function getStoredTrack(time) {
         if (trackData.length === 0) return null;
         let prev = trackData[0], next = trackData[trackData.length - 1];
-        
+
         for(let i=0; i<trackData.length; i++) {
             if(trackData[i].t <= time) prev = trackData[i];
             if(trackData[i].t > time) { next = trackData[i]; break; }
         }
-        
-        // 두 프레임 사이를 자연스럽게 이어주는 수학
+
         if (prev && next && next.t > prev.t && (next.t - prev.t <= 0.5)) {
             const ratio = (time - prev.t) / (next.t - prev.t);
             return {
@@ -340,27 +514,25 @@
     function render() {
         if (video.videoWidth === 0) { requestAnimationFrame(render); return; }
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        
-        // 💡 [수정3] 흔들림 없는 타겟 추적 
+
         if (trackData.length > 0 && !video.paused) {
-            let currentTrack = getStoredTrack(video.currentTime); // 보간법 적용
-            if(currentTrack) { 
-                targetX = currentTrack.x; 
-                targetY = currentTrack.y; 
-                targetZoom = currentTrack.z; 
+            let currentTrack = getStoredTrack(video.currentTime);
+            if(currentTrack) {
+                targetX = currentTrack.x;
+                targetY = currentTrack.y;
+                targetZoom = currentTrack.z;
             }
         }
 
-        // 약간의 관성을 줘서 더욱 시네마틱하게 이동
-        centerX += (targetX - centerX) * 0.25; 
+        centerX += (targetX - centerX) * 0.25;
         centerY += (targetY - centerY) * 0.25;
         currentZoom += (targetZoom - currentZoom) * 0.15;
-        
-        const vW = canvas.width / currentZoom; 
+
+        const vW = canvas.width / currentZoom;
         const vH = canvas.height / currentZoom;
-        
+
         ctx.drawImage(video, centerX - vW/2, centerY - vH/2, vW, vH, 0, 0, canvas.width, canvas.height);
-        
+
         if (!video.paused) {
             seekBar.value = video.currentTime;
             document.getElementById('timeDisplay').innerText = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
