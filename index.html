@@ -255,16 +255,27 @@
         storageBucket: "torytennis.firebasestorage.app"
     };
 
+    // ── Firebase SDK 로드 확인 ────────────────────────────────────
+    if (typeof firebase !== 'undefined') {
+        console.log('[Tory] Firebase SDK 로드 성공 ✅', firebase.SDK_VERSION);
+    } else {
+        console.error('[Tory] Firebase SDK 로드 실패 ❌ — CDN 스크립트를 확인하세요.');
+    }
+
     let _db = null;
     function getDb() {
         if (_db) return _db;
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+            console.log('[Tory] Firebase 앱 초기화 완료 ✅', firebaseConfig.projectId);
+        }
         _db = firebase.firestore();
         return _db;
     }
 
-    // ── 분석 목록 모달 ────────────────────────────────────────────
+    // ── 분析 목록 모달 ────────────────────────────────────────────
     function openAnalysisModal() {
+        console.log('[Tory] 분석 목록 버튼 클릭 ✅ — 모달 오픈');
         document.getElementById('analysisModalOverlay').classList.add('open');
         document.getElementById('analysisModalPanel').style.display = 'flex';
         loadAnalysesList();
@@ -279,14 +290,17 @@
         const listEl = document.getElementById('analysisList');
         listEl.innerHTML = '<div class="modal-loading">⏳ 불러오는 중...</div>';
 
-        if (firebaseConfig.apiKey === 'AIzaSyA0ni0Jr31dk152mdge80VnHHwvxZG6sf8') {
+        if (firebaseConfig.apiKey === 'YOUR_WEB_API_KEY') {
+            console.warn('[Tory] Firebase API 키 미설정 ⚠️');
             listEl.innerHTML = `<div class="modal-error">⚠️ Firebase API 키 미설정<br><small style="color:#888; line-height:1.6;">index.html의 firebaseConfig.apiKey를<br>Firebase 콘솔 → 프로젝트 설정 → 일반 → 웹 API 키로 교체하세요.</small></div>`;
             return;
         }
 
+        console.log('[Tory] Firestore 쿼리 시작 — analyses 컬렉션');
         try {
             const db = getDb();
             const snapshot = await db.collection('analyses').orderBy('analyzed_at', 'desc').get();
+            console.log(`[Tory] Firestore 응답 ✅ — 문서 ${snapshot.size}개`);
 
             if (snapshot.empty) {
                 listEl.innerHTML = '<div class="modal-empty">분석 데이터가 없습니다.<br><small style="color:#444;">tory_engine.py를 실행하면 자동으로 저장됩니다.</small></div>';
@@ -313,6 +327,7 @@
     }
 
     function selectAnalysis(docId, data) {
+        console.log(`[Tory] 분석 선택 ✅ — ${docId}`, { events: (data.events||[]).length, trackData: (data.trackData||[]).length });
         currentProjectName = docId;
 
         if (data.video_name) {
